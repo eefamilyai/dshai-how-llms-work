@@ -1,0 +1,48 @@
+<!doctype html><html><head><meta charset="utf-8"><title>AUDIT</title>
+<style>body{margin:0;background:#04060c}canvas{display:none}
+#out{color:#8fa2c4;font:12px monospace;white-space:pre;padding:10px}</style></head><body>
+<canvas id="hero-art" width="720" height="450"></canvas>
+<canvas id="p1-art" width="720" height="450"></canvas>
+<canvas id="p2-art" width="720" height="450"></canvas>
+<canvas id="p3-art" width="720" height="450"></canvas>
+<canvas id="p4-art" width="720" height="450"></canvas>
+<canvas id="p5-art" width="720" height="450"></canvas>
+<canvas id="p6-art" width="720" height="450"></canvas>
+<canvas id="p7-art" width="720" height="450"></canvas>
+<canvas id="p8-art" width="720" height="450"></canvas>
+<canvas id="p9-art" width="720" height="450"></canvas>
+<canvas id="p10-art" width="720" height="450"></canvas>
+<canvas id="p11-art" width="720" height="450"></canvas>
+<canvas id="p12-art" width="720" height="450"></canvas>
+<canvas id="p13-art" width="720" height="450"></canvas><pre id="out">running</pre>
+<script src="anim.js?v=7"></script>
+<script>
+var IDS=["hero-art","p1-art","p2-art","p3-art","p4-art","p5-art","p6-art","p7-art","p8-art","p9-art","p10-art","p11-art","p12-art","p13-art"];
+function stats(id){
+  var cv=document.getElementById(id), c=cv.getContext("2d");
+  var W=cv.width,H=cv.height,d=c.getImageData(0,0,W,H).data;
+  var bright=0,mid=0,dark=0,lumSum=0,n=0;
+  for(var y=0;y<H;y+=2)for(var x=0;x<W;x+=2){
+    var i=(y*W+x)*4,r=d[i],g=d[i+1],b=d[i+2],a=d[i+3]; if(a<10)continue;
+    var lum=0.299*r+0.587*g+0.114*b; n++; lumSum+=lum;
+    if(lum>150)bright++; else if(lum>70)mid++; else dark++;
+  }
+  return {mean:lumSum/n, brightPct:100*bright/n, midPct:100*mid/n};
+}
+setTimeout(function(){
+  var lines=[], order=[];
+  for(var k=0;k<IDS.length;k++){
+    var s=stats(IDS[k]);
+    order.push([IDS[k], s]);
+  }
+  order.sort(function(a,b){return a[1].mean-b[1].mean;});
+  for(var j=0;j<order.length;j++){
+    var id=order[j][0], s=order[j][1];
+    var flag = s.mean<20?"  <-- TOO DIM":(s.mean<35?"  <- dim":"");
+    lines.push(id.padEnd(12)+" meanLum="+s.mean.toFixed(1).padStart(6)+
+      "  bright%="+s.brightPct.toFixed(1).padStart(5)+
+      "  mid%="+s.midPct.toFixed(1).padStart(5)+flag);
+  }
+  document.getElementById("out").textContent=lines.join("\n");
+}, 7000);
+</script></body></html>
