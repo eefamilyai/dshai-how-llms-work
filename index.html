@@ -1,0 +1,583 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How LLMs Work — A Visual Walkthrough</title>
+<meta name="description" content="A visual, step-by-step walkthrough of how a large language model turns text into a next-token prediction — tokenization, embeddings, attention, MLP, sampling, prefill vs decode.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="progress"></div>
+
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand">How <span>LLMs</span> Work</div>
+    <div class="spacer"></div>
+    <a class="mini" href="https://deepseek-v4-1.dshai.reggilion.com">Part 2: DeepSeek V4.1 →</a>
+  </div>
+</header>
+
+<nav class="toc" id="toc">
+  <h4>Contents</h4>
+  <a href="#hero"><b>0</b> The one idea</a>
+  <a href="#overview"><b>1</b> The whole pipeline</a>
+  <a href="#tokens"><b>2</b> Tokenization</a>
+  <a href="#embed"><b>3</b> Embeddings</a>
+  <a href="#residual"><b>4</b> Residual stream</a>
+  <a href="#attention"><b>5</b> Self-attention</a>
+  <a href="#mask"><b>6</b> Causal mask</a>
+  <a href="#heads"><b>7</b> Multi-head</a>
+  <a href="#mlp"><b>8</b> Feed-forward</a>
+  <a href="#stack"><b>9</b> Stacking blocks</a>
+  <a href="#logits"><b>10</b> Logits</a>
+  <a href="#sample"><b>11</b> Sampling</a>
+  <a href="#loop"><b>12</b> The loop</a>
+  <a href="#prefill"><b>13</b> Prefill vs decode</a>
+  <a href="#kv"><b>14</b> KV cache</a>
+  <a href="#train"><b>15</b> Training</a>
+  <a href="#align"><b>16</b> Becoming an assistant</a>
+  <a href="#cost"><b>17</b> Where the cost is</a>
+  <a href="#glossary"><b>18</b> Glossary</a>
+</nav>
+
+<main>
+
+<section class="hero" id="hero">
+  <div class="wrap">
+    <div class="eyebrow">Part 1 of 2 · Visual explainer</div>
+    <h1>How a large language model <em>actually works</em></h1>
+    <p class="lede">Strip away the branding and every LLM is the same machine: it reads a sequence of
+      tokens and outputs a probability for what comes next. Then it does it again. This page walks the
+      entire path — once, slowly, with pictures.</p>
+    <div class="thesis">
+      <p><b>The one idea:</b> a language model never "writes a sentence". It computes a probability
+      distribution over its entire vocabulary for the <i>single next token</i>, picks one, glues it onto
+      the end of the input, and runs again. A 500-word answer is ~700 trips around that same loop.</p>
+    </div>
+  </div>
+</section>
+
+<section id="overview">
+  <div class="wrap">
+    <div class="eyebrow">01 · The whole pipeline</div>
+    <h2>Eight stages, start to finish</h2>
+    <p class="one-line">text → tokens → vectors → N blocks → logits → probabilities → sample → append</p>
+    <div class="pipe">
+      <div class="step"><div class="n">01</div><div class="t">Tokenize</div><div class="d">Text splits into sub-word chunks and becomes integer IDs</div></div>
+      <div class="arrowx">→</div>
+      <div class="step"><div class="n">02</div><div class="t">Embed</div><div class="d">Each ID looks up a learned vector</div></div>
+      <div class="arrowx">→</div>
+      <div class="step"><div class="n">03</div><div class="t">Blocks ×N</div><div class="d">Attention mixes across positions; MLP transforms each</div></div>
+      <div class="arrowx">→</div>
+      <div class="step"><div class="n">04</div><div class="t">Final norm</div><div class="d">One last normalize before the head</div></div>
+      <div class="arrowx">→</div>
+      <div class="step"><div class="n">05</div><div class="t">Logits</div><div class="d">One raw score per vocabulary entry</div></div>
+      <div class="arrowx">→</div>
+      <div class="step"><div class="n">06</div><div class="t">Softmax</div><div class="d">Scores become a probability distribution</div></div>
+      <div class="arrowx">→</div>
+      <div class="step"><div class="n">07</div><div class="t">Sample</div><div class="d">Temperature / top-k / top-p choose one token</div></div>
+      <div class="arrowx">→</div>
+      <div class="step"><div class="n">08</div><div class="t">Append + repeat</div><div class="d">Output feeds back in as input</div></div>
+    </div>
+    <div class="callout key">
+      <p><b>Only stages 3 and 5 contain "knowledge".</b> Everything else is plumbing. That is why
+      virtually all research effort lands on the attention mechanism and the feed-forward layers — and
+      why DeepSeek V4.1, in <a href="https://deepseek-v4-1.dshai.reggilion.com">Part 2</a>, changes
+      almost nothing about stages 1, 2, 6, 7, 8 and rebuilds stages 3–5 completely.</p>
+    </div>
+  </div>
+</section>
+
+<section id="tokens">
+  <div class="wrap">
+    <div class="eyebrow">02 · Tokenization</div>
+    <h2>Text becomes integers</h2>
+    <p class="one-line">A model has never seen a letter. It only ever sees IDs.</p>
+    <p>The tokenizer is a fixed, non-neural algorithm. It splits text into <b>tokens</b> — frequent
+      words whole, rare words into pieces, punctuation and whitespace attached to what follows — and maps
+      each to an integer from a fixed vocabulary of roughly 100k–200k entries. The model's entire
+      input and output world is that list of integers.</p>
+    <p>Type anything below to see the shape of it. (This demo uses a simplified splitter with
+      deterministic fake IDs — a real byte-pair encoder would differ in the exact cuts, but the
+      <i>feel</i> is the same: common things get one token, rare things get chopped.)</p>
+    <input type="text" id="tokin" value="Tokenization is unbelievably important." autocomplete="off">
+    <div class="tokrow" id="tokout"></div>
+    <div class="grid g3" style="margin-top:20px">
+      <div class="card"><div class="pill">why it matters</div>
+        <p class="small" style="margin-top:10px">Context length is measured in <b>tokens</b>, not words
+        or characters. English averages ~1.3 tokens per word; code, JSON, and non-Latin scripts are
+        far worse. A "1M-token context" is roughly a 750,000-word book.</p></div>
+      <div class="card"><div class="pill">why it's brittle</div>
+        <p class="small" style="margin-top:10px">Models famously miscount letters in words because they
+        never see letters — only whole-chunk IDs. <code>strawberry</code> might be one token, or three,
+        and the model has no idea which characters are inside.</p></div>
+      <div class="card"><div class="pill">why it costs</div>
+        <p class="small" style="margin-top:10px">Every token you send must be processed by every layer,
+        and every token the model generates must be stored in the KV cache. Tokens are the unit of
+        money, latency, and memory.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="embed">
+  <div class="wrap">
+    <div class="eyebrow">03 · Embeddings</div>
+    <h2>Each ID becomes a vector</h2>
+    <p class="one-line">An embedding table is a lookup: row 4711 in, a 4096-number vector out.</p>
+    <p>The embedding matrix is a giant learned table with one row per vocabulary entry. Looking up a
+      token is just indexing a row. That vector — typically 2,000 to 8,000 numbers wide — is the
+      token's starting representation, and everything downstream edits it.</p>
+    <div class="card">
+      <div class="small muted" style="margin-bottom:8px">token <span class="mono">"cat"</span> → ID 4711 → row 4711 of the embedding table</div>
+      <div class="vec" id="vec1"></div>
+      <div class="small muted" style="margin-top:10px">…4,096 numbers, each learned. Direction encodes meaning:
+        similar words end up pointing in similar directions, which is why <span class="mono">king − man + woman ≈ queen</span> works.</div>
+    </div>
+    <div class="callout">
+      <p><b>Position also matters.</b> "dog bites man" and "man bites dog" contain identical tokens.
+      A positional signal — sinusoidal encodings, learned positions, or RoPE — is added or injected so
+      the model knows the order. Nearly every modern model uses some form of <b>rotary position
+      embedding (RoPE)</b>, which rotates the query and key vectors by an angle proportional to
+      position. Hold on to that: V4.1's FP4 cache quantizes <i>after</i> RoPE, and that detail turns
+      out to matter.</p>
+    </div>
+  </div>
+</section>
+
+<section id="residual">
+  <div class="wrap">
+    <div class="eyebrow">04 · The residual stream</div>
+    <h2>One highway runs through the whole model</h2>
+    <p class="one-line">Blocks do not pass data along a chain. They read from and write to a shared bus.</p>
+    <p>Picture a single wide vector — the <b>residual stream</b> — running from the embedding layer to
+      the output. Each transformer block reads it, computes something, and <b>adds</b> the result back.
+      Nothing is overwritten. The stream accumulates.</p>
+    <div class="blocks" id="resid">
+      <div class="blk hl"><span class="nm">Embedding → residual stream</span><span class="tag">initial write</span></div>
+      <div class="blk"><span class="nm">Block 1</span><span class="tag">+ attention, + MLP</span></div>
+      <div class="blk"><span class="nm">Block 2</span><span class="tag">+ attention, + MLP</span></div>
+      <div class="blk dimmed"><span class="nm">… 60 more …</span><span class="tag">additive</span></div>
+      <div class="blk"><span class="nm">Final norm</span><span class="tag">clean up</span></div>
+      <div class="blk hl"><span class="nm">Unembedding → logits</span><span class="tag">read out</span></div>
+    </div>
+    <p class="small muted">This "additive" design is why deep models train at all: gradients have a
+      clean, short path to every layer. It is also why the residual width is a natural place to
+      innovate — DeepSeek V4 introduced <b>hyper-connections</b>, widening this stream into several
+      parallel lanes, and V4.1 refined them into <b>Single-Pass mHC</b>.</p>
+  </div>
+</section>
+
+<section id="attention">
+  <div class="wrap">
+    <div class="eyebrow">05 · Self-attention</div>
+    <h2>The only place tokens talk to each other</h2>
+    <p class="one-line">Each token asks a question, every earlier token advertises an answer, and the best matches get averaged in.</p>
+    <p>Attention is a lookup. For each token the model computes three vectors by linear projection:</p>
+    <div class="grid g3">
+      <div class="card"><div class="pill" style="color:var(--cyan);border-color:var(--cyan)">Query — Q</div>
+        <p class="small" style="margin-top:10px">"What am I looking for?"</p></div>
+      <div class="card"><div class="pill" style="color:var(--violet);border-color:var(--violet)">Key — K</div>
+        <p class="small" style="margin-top:10px">"What do I offer?"</p></div>
+      <div class="card"><div class="pill" style="color:var(--green);border-color:var(--green)">Value — V</div>
+        <p class="small" style="margin-top:10px">"What do I actually hand over if chosen?"</p></div>
+    </div>
+    <p style="margin-top:18px">The score between a query and a key is their dot product. High dot product
+      = good match = high weight. Softmax turns the scores into weights that sum to 1, and the output is
+      the weighted average of the values.</p>
+    <div class="callout key"><p class="mono" style="margin:0;font-size:13.5px;line-height:1.9">
+      Attention(Q, K, V) = softmax( Q · Kᵀ / √d ) · V
+    </p></div>
+    <h3>See it work</h3>
+    <p class="small muted">Click any token. The bars show how much that token pulls information from each
+      earlier token. These weights are hand-drawn to show the phenomenon — a real head learns its own
+      pattern, and different heads learn different ones.</p>
+    <div class="tokrow" id="attnToks"></div>
+    <div class="attn" id="attnBars"></div>
+    <p class="small" id="attnNote" style="margin-top:12px;color:var(--cyan)"></p>
+    <div class="callout">
+      <p><b>This is the expensive part.</b> Every token must be scored against every earlier token. Double
+      the context and you quadruple the work — <b>O(n²)</b>. At 1M tokens a full attention matrix would
+      have a trillion entries. Almost every efficiency technique in modern LLMs, V4.1 included, exists to
+      avoid computing that matrix.</p>
+    </div>
+  </div>
+</section>
+
+<section id="mask">
+  <div class="wrap">
+    <div class="eyebrow">06 · Causal mask</div>
+    <h2>No peeking at the future</h2>
+    <p class="one-line">A triangular mask forces each position to attend only to itself and what came before.</p>
+    <p>The model is trained to predict the next token, so it must not be allowed to see the next token.
+      Before softmax, every score pointing at a later position is set to −∞, which becomes exactly 0
+      after softmax. The result is a lower-triangular pattern.</p>
+    <div class="grid g2" style="align-items:start">
+      <div>
+        <div class="mask" id="maskGrid"></div>
+        <div class="small muted" style="margin-top:10px">Rows = the token doing the looking. Columns = the
+          token being looked at. Amber = self, blue = visible past, dark = masked out. This is why LLMs
+          can generate left-to-right but cannot revise a token they already emitted.</div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Why it's called "causal"</h3>
+        <p class="small">The mask enforces causality: information flows only forward in time. That
+          single constraint is what lets one forward pass compute a training signal for <i>every</i>
+          position simultaneously — you get N predictions from one pass over N tokens, because none of
+          them cheated.</p>
+        <p class="small">It is also why <b>prefill</b> (processing your prompt) can be done in parallel
+          while <b>decode</b> (writing the answer) must be strictly sequential. Everything in
+          <a href="#prefill">section 13</a> follows from this triangle.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="heads">
+  <div class="wrap">
+    <div class="eyebrow">07 · Multi-head attention</div>
+    <h2>Many lookups at once, in parallel subspaces</h2>
+    <p class="one-line">One attention pattern is not enough. So the model runs dozens, then concatenates.</p>
+    <p>Instead of one Q/K/V set, the model splits the vector into <b>heads</b> — typically 32 to 128.
+      Each head has its own projections and learns a different relationship. One head tracks the previous
+      token; another resolves pronouns to their antecedents; another matches brackets; another links a
+      verb to its subject. Their outputs are concatenated and projected back down to the stream width.</p>
+    <div class="grid g4" id="headGrid"></div>
+    <p class="small muted">Each square is a small attention matrix for one head — the x-axis is the token
+      doing the looking, the y-axis what it looks at. Bright cells are strong links. Real models learn
+      patterns with this much variety. Grouped-query attention (GQA) and multi-head latent attention
+      (MLA) shrink how many distinct K/V heads must be stored — the first of three multiplicative ways to
+      cut attention cost, and the one V4.1 keeps while attacking the other two.</p>
+  </div>
+</section>
+
+<section id="mlp">
+  <div class="wrap">
+    <div class="eyebrow">08 · Feed-forward network</div>
+    <h2>Two-thirds of the parameters live here</h2>
+    <p class="one-line">Attention routes information. The MLP is where most of the stored knowledge sits.</p>
+    <p>After attention, every position independently passes through a small two-layer network:
+      expand to roughly 4× the width, apply a nonlinearity, project back. It never mixes positions — it
+      is purely per-token processing.</p>
+    <div class="grid g2">
+      <div class="card"><h3 style="margin-top:0">The key–value memory view</h3>
+        <p class="small">Research on interpretability suggests the first MLP matrix acts like a set of
+        <b>keys</b> — pattern detectors that fire on specific features — and the second matrix like the
+        <b>values</b> they write into the stream. Recalling a fact is a soft lookup, not a database
+        query, and it costs a full matrix multiply every time.</p></div>
+      <div class="card"><h3 style="margin-top:0">Why sparsity appeared</h3>
+        <p class="small">Because the MLP holds most of the parameters, it is the natural place to add
+        <b>Mixture-of-Experts</b>: split it into many parallel experts and route each token to only a
+        couple. Total parameters balloon while per-token compute barely moves. DeepSeek's models are all
+        MoE — V4.1-Flash has 552B backbone parameters but activates 8B during prefill.</p></div>
+    </div>
+    <div class="callout">
+      <p><b>Note the split of labour:</b> attention decides <i>what to look at</i>; the MLP decides
+      <i>what to make of it</i>. Attention is O(n²) in sequence length, the MLP is O(n) but very wide.
+      That division explains why long context is an attention problem and model capability is largely an
+      MLP-and-depth problem.</p>
+    </div>
+  </div>
+</section>
+
+<section id="stack">
+  <div class="wrap">
+    <div class="eyebrow">09 · Depth</div>
+    <h2>Stack that block 60–120 times</h2>
+    <p class="one-line">Each layer refines the representation; depth is where abstraction comes from.</p>
+    <p>A transformer is not a clever architecture so much as a simple one repeated to an extreme degree.
+      Early layers handle surface patterns and local syntax; middle layers build syntax trees and entity
+      tracking; late layers hold task state and abstract semantics. The same residual stream is edited
+      at every stop.</p>
+    <div class="grid g2" style="align-items:start">
+      <div class="blocks">
+        <div class="blk dimmed"><span class="nm">Layers 1–15</span><span class="tag">surface form, token identity</span></div>
+        <div class="blk"><span class="nm">Layers 16–40</span><span class="tag">syntax, coreference, local semantics</span></div>
+        <div class="blk"><span class="nm">Layers 41–70</span><span class="tag">entities, facts, reasoning chains</span></div>
+        <div class="blk hl"><span class="nm">Layers 71–90</span><span class="tag">task state, output formatting</span></div>
+      </div>
+      <div>
+        <p class="small">Two consequences worth holding onto:</p>
+        <ul class="tight small">
+          <li><b>Cost scales linearly with depth.</b> A 100-layer model does 100 blocks of work per token.
+            Truncating the work means truncating the depth you have to run — which is exactly what
+            V4.1's encoder-decoder split does at prefill time.</li>
+          <li><b>Depth and cache are different axes.</b> You can cut the number of layers that must run,
+            or cut the amount of state each layer must keep. V4.1 does both, separately.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="logits">
+  <div class="wrap">
+    <div class="eyebrow">10 · The output head</div>
+    <h2>One vector becomes 200,000 scores</h2>
+    <p class="one-line">The last position's vector is projected against every vocabulary entry.</p>
+    <p>Take the final residual vector at the <i>last</i> position only — the earlier positions are
+      discarded at inference — normalize it, and multiply by the unembedding matrix. The result is one
+      raw score, a <b>logit</b>, for every token in the vocabulary. Softmax converts the whole set into
+      probabilities that sum to 1.</p>
+    <div class="bars" id="logitBars"></div>
+    <p class="small muted">Only the last position matters for generation. The other N−1 positions did
+      their work during training, providing extra supervised signals for free.</p>
+  </div>
+</section>
+
+<section id="sample">
+  <div class="wrap">
+    <div class="eyebrow">11 · Sampling</div>
+    <h2>Choosing the token</h2>
+    <p class="one-line">The distribution is not the answer. The answer is one draw from it.</p>
+    <p>Greedily taking the top token every time produces fluent, repetitive, brittle text. Real systems
+      reshape the distribution first, then draw from it. Move the sliders.</p>
+    <div class="grid g2" style="align-items:start">
+      <div class="card">
+        <div class="slider"><label for="temp">temperature</label>
+          <input type="range" id="temp" min="0.05" max="2" step="0.05" value="1"><output id="tempv">1.00</output></div>
+        <div class="slider"><label for="topk">top-k</label>
+          <input type="range" id="topk" min="1" max="10" step="1" value="10"><output id="topkv">10</output></div>
+        <div class="slider"><label for="topp">top-p</label>
+          <input type="range" id="topp" min="0.05" max="1" step="0.01" value="1"><output id="toppv">1.00</output></div>
+        <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn" id="drawBtn">Draw a token →</button>
+          <button class="btn ghost" id="resetBtn">Reset</button>
+        </div>
+        <div class="small" id="genLine" style="margin-top:16px;font-family:var(--mono);color:var(--ink);min-height:22px"></div>
+      </div>
+      <div>
+        <div class="bars" id="sampBars"></div>
+        <p class="small muted" id="sampNote"></p>
+      </div>
+    </div>
+    <div class="grid g3" style="margin-top:20px">
+      <div class="card"><div class="pill">temperature</div>
+        <p class="small" style="margin-top:10px">Divides the logits before softmax. Below 1 sharpens the
+        distribution (more deterministic); above 1 flattens it (more surprising). At 0 it is pure
+        argmax.</p></div>
+      <div class="card"><div class="pill">top-k</div>
+        <p class="small" style="margin-top:10px">Keep only the k highest-probability tokens and
+        renormalize. A hard floor on nonsense — but a fixed k is wrong for both peaked and flat
+        distributions.</p></div>
+      <div class="card"><div class="pill">top-p (nucleus)</div>
+        <p class="small" style="margin-top:10px">Keep the smallest set of tokens whose probabilities sum
+        to p. Adaptive: narrow when the model is confident, wide when it is unsure. Usually the primary
+        control.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="loop">
+  <div class="wrap">
+    <div class="eyebrow">12 · Autoregression</div>
+    <h2>And then you do it all again</h2>
+    <p class="one-line">Output token → appended to input → whole model re-run → next token.</p>
+    <p>This is the loop that makes an LLM feel like it is thinking in sentences. It is not. Each pass
+      produces exactly one token and throws away everything except that token and the cached state.</p>
+    <div class="card">
+      <div class="small muted">Iteration 1</div>
+      <div class="mono small" style="margin:6px 0 14px;color:var(--ink)">The capital of France is <span style="color:var(--cyan)">▮</span></div>
+      <div class="small muted">The model's top prediction: <span class="mono" style="color:var(--green)">"Paris"</span> at 96.4%</div>
+      <div class="small muted" style="margin-top:14px">Iteration 2 — input is now the whole string plus "Paris"</div>
+      <div class="mono small" style="margin:6px 0 14px;color:var(--ink)">The capital of France is Paris<span style="color:var(--cyan)">▮</span></div>
+      <div class="small muted">Top prediction: <span class="mono" style="color:var(--green)">"."</span> at 71.2%</div>
+      <div class="small muted" style="margin-top:14px">Iteration 3</div>
+      <div class="mono small" style="margin:6px 0 0;color:var(--ink)">The capital of France is Paris.<span style="color:var(--cyan)">▮</span> → stop token</div>
+    </div>
+    <div class="callout warn">
+      <p><b>This is the true bottleneck.</b> A 1,000-token answer requires 1,000 sequential forward
+      passes. You cannot parallelize them — each depends on the last. Long-context work is therefore
+      split between two very different problems: making the <i>prefill</i> of your input cheap, and
+      making each <i>decode</i> step cheap. V4.1's architecture is explicitly a response to both.</p>
+    </div>
+  </div>
+</section>
+
+<section id="prefill">
+  <div class="wrap">
+    <div class="eyebrow">13 · Two phases</div>
+    <h2>Prefill and decode are different machines</h2>
+    <p class="one-line">Prefill is parallel and compute-bound. Decode is sequential and memory-bound.</p>
+    <div class="grid g2">
+      <div class="card">
+        <div class="pill" style="color:var(--amber);border-color:var(--amber)">PREFILL</div>
+        <h3>Read the whole prompt at once</h3>
+        <p class="small">All N input tokens go through the model in a single pass. Because the causal mask
+          forbids looking forward, every position's computation is independent — so this is one big
+          parallel matrix operation. It is <b>compute-bound</b>: the GPU is saturated doing math.</p>
+        <p class="small">Cost grows with (prompt length × depth). For an agent that re-sends a long
+          conversation on every tool call, prefill dominates the bill entirely.</p>
+      </div>
+      <div class="card">
+        <div class="pill" style="color:var(--cyan);border-color:var(--cyan)">DECODE</div>
+        <h3>Write one token at a time</h3>
+        <p class="small">Each new token is a separate forward pass through all layers. The math per step
+          is tiny — a single row of the attention matrix — but it must read the entire <b>KV cache</b>
+          from memory. So decode is <b>memory-bandwidth-bound</b>: the GPU spends its time waiting for
+          data, not computing.</p>
+        <p class="small">This is why shrinking the KV cache raises throughput far more than shrinking the
+          parameter count.</p>
+      </div>
+    </div>
+    <div class="callout key">
+      <p><b>The two levers, named:</b></p>
+      <p style="margin-bottom:0"><b>Cut prefill cost</b> → run fewer layers on the input.<br>
+      <b>Cut decode cost</b> → keep less state per token, and reuse what you keep across layers.<br>
+      DeepSeek V4.1 does the first with <b>CED</b>, and the second with <b>CSA2</b> and <b>FP4 caching</b>.
+      <a href="https://deepseek-v4-1.dshai.reggilion.com">Part 2</a> shows both in detail.</p>
+    </div>
+  </div>
+</section>
+
+<section id="kv">
+  <div class="wrap">
+    <div class="eyebrow">14 · The KV cache</div>
+    <h2>The memory that makes generation possible</h2>
+    <p class="one-line">Without it, every new token would re-read the whole conversation.</p>
+    <p>Attention needs the K and V vectors of every previous token. Recomputing them each step would make
+      generation quadratic in the number of generated tokens. So they are computed once and stored — the
+      <b>KV cache</b>.</p>
+    <div class="kv">
+      <div class="row"><div class="k">what is stored</div><div class="v">Key and Value vectors for every layer, every head, every token so far — plus, in sparse designs, the index structures used to find them.</div></div>
+      <div class="row"><div class="k">size</div><div class="v">2 × layers × kv_heads × head_dim × tokens × bytes_per_value. It grows linearly with context and is the dominant memory consumer at long context.</div></div>
+      <div class="row"><div class="k">where it lives</div><div class="v">First in HBM (fast, small, expensive). Long-context systems then offload to host memory or SSD, which turns the problem into one of storage and interconnect bandwidth.</div></div>
+      <div class="row"><div class="k">why it is reused</div><div class="v">A shared prefix — a system prompt, a document, a conversation history — produces an identical KV cache. Caching it means paying for prefill only once. Agent workloads live or die on this hit rate.</div></div>
+    </div>
+    <p class="small muted">Every byte shaved off a KV entry multiplies across layers × heads × tokens.
+      That is why V4.1's headline number — 890 bytes per token of global KV, a quarter of its
+      predecessor, and an eighth of the persistent footprint — is a bigger deal than it sounds.</p>
+  </div>
+</section>
+
+<section id="train">
+  <div class="wrap">
+    <div class="eyebrow">15 · Training</div>
+    <h2>How the weights get their values</h2>
+    <p class="one-line">Predict the next token on trillions of tokens of text. Nudge every weight to be slightly less wrong. Repeat.</p>
+    <p>There is no supervision, no labels, no human in the loop at this stage. The training signal is
+      simply "the next token in the document" — which is why this is called <b>self-supervised</b>
+      learning, and why it can consume the entire internet.</p>
+    <div class="pipe" style="margin-top:20px">
+      <div class="step"><div class="n">01</div><div class="t">Forward pass</div><div class="d">Predict every position's next token at once, using the causal mask</div></div>
+      <div class="arrowx">→</div>
+      <div class="step"><div class="n">02</div><div class="t">Loss</div><div class="d">Cross-entropy between predicted and actual next token</div></div>
+      <div class="arrowx">→</div>
+      <div class="step"><div class="n">03</div><div class="t">Backward pass</div><div class="d">Backpropagation computes a gradient for all parameters</div></div>
+      <div class="arrowx">→</div>
+      <div class="step"><div class="n">04</div><div class="t">Optimizer step</div><div class="d">AdamW or Muon nudges every weight downhill</div></div>
+      <div class="arrowx">→</div>
+      <div class="step"><div class="n">05</div><div class="t">Repeat</div><div class="d">Billions of times, across thousands of GPUs</div></div>
+    </div>
+    <div class="grid g2" style="margin-top:24px">
+      <div class="card"><h3 style="margin-top:0">What emerges</h3>
+        <p class="small">Nothing in this objective mentions grammar, arithmetic, translation, or code.
+        Yet predicting the next token well <i>requires</i> all of them. Capability is a side effect of
+        compression: the model is forced to build whatever internal machinery makes text predictable.</p></div>
+      <div class="card"><h3 style="margin-top:0">What it costs</h3>
+        <p class="small">Pretraining is measured in GPU-months and megawatt-hours. This is where the
+        "training is the expensive part, inference is the profitable part" split comes from — and why
+        architectures that reduce <i>inference</i> cost are commercially decisive even if they cost more
+        to train.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="align">
+  <div class="wrap">
+    <div class="eyebrow">16 · Post-training</div>
+    <h2>From autocomplete to assistant</h2>
+    <p class="one-line">A pretrained model completes text. It does not answer questions.</p>
+    <p>A base model asked "What is the capital of France?" may respond with a list of exam questions,
+      because that is what the pattern looks like on the web. Turning it into something helpful is a
+      separate pipeline.</p>
+    <div class="blocks">
+      <div class="blk hl"><span class="nm">1 · Supervised fine-tuning (SFT)</span><span class="tag">learn the assistant format from human-written examples</span></div>
+      <div class="blk"><span class="nm">2 · Preference tuning (RLHF / DPO)</span><span class="tag">optimize toward answers humans rate as better</span></div>
+      <div class="blk"><span class="nm">3 · Reasoning / RL on verifiable tasks</span><span class="tag">reward correct math, code, and tool use; learn to think longer</span></div>
+      <div class="blk"><span class="nm">4 · Distillation & effort control</span><span class="tag">compress capability, and dial how much thinking a query gets</span></div>
+    </div>
+    <div class="callout">
+      <p><b>Test-time scaling.</b> A modern reasoning model spends hundreds or thousands of tokens
+      "thinking" before answering. This buys accuracy with compute — and it is why long context and cheap
+      prefill stopped being academic concerns and became product requirements. The thinking tokens are
+      just more tokens, and they all have to go through the same model.</p>
+    </div>
+  </div>
+</section>
+
+<section id="cost">
+  <div class="wrap">
+    <div class="eyebrow">17 · Where the cost is</div>
+    <h2>Three things blow up with context</h2>
+    <p class="one-line">Compute, cache memory, and the bandwidth to move that memory around.</p>
+    <div class="grid g3">
+      <div class="card"><div class="pill" style="color:var(--rose);border-color:var(--rose)">O(n²)</div>
+        <h3>Attention compute</h3>
+        <p class="small">Every token scored against every earlier token. Doubling context quadruples the
+        attention work. At 1M tokens this is the reason a naive model cannot function at all.</p></div>
+      <div class="card"><div class="pill" style="color:var(--amber);border-color:var(--amber)">O(n)</div>
+        <h3>KV cache memory</h3>
+        <p class="small">Linear in context, but with a large constant: layers × heads × dimensions ×
+        bytes. It fills HBM, then spills to host memory and SSD, where capacity and bandwidth take over
+        as the binding constraint.</p></div>
+      <div class="card"><div class="pill" style="color:var(--violet);border-color:var(--violet)">O(n·L)</div>
+        <h3>Prefill work</h3>
+        <p class="small">The prompt passes through every layer once. For agents that resend long
+        histories on every tool call, this is the single largest line item on the bill.</p></div>
+    </div>
+    <div class="callout key">
+      <p><b>Every serious long-context architecture is a response to one of these three lines.</b>
+      That is the entire frame for Part 2 — the standard transformer above, versus a model built to make
+      all three numbers smaller at once.</p>
+      <p style="margin-bottom:0"><a href="https://deepseek-v4-1.dshai.reggilion.com">Continue to Part 2:
+      Standard LLM vs DeepSeek V4.1 →</a></p>
+    </div>
+  </div>
+</section>
+
+<section id="glossary">
+  <div class="wrap">
+    <div class="eyebrow">18 · Glossary</div>
+    <h2>Every term, one line each</h2>
+    <table>
+      <tr><th>Term</th><th>Meaning</th></tr>
+      <tr><td>Token</td><td>A sub-word chunk — the atomic unit a model reads and writes. Roughly ¾ of an English word.</td></tr>
+      <tr><td>Embedding</td><td>The learned vector a token ID maps to.</td></tr>
+      <tr><td>Residual stream</td><td>The shared additive vector that every block reads from and writes to.</td></tr>
+      <tr><td>Q / K / V</td><td>Query, Key, Value — the three projections attention uses to decide what to look at.</td></tr>
+      <tr><td>Softmax</td><td>Turns raw scores into a probability distribution that sums to 1.</td></tr>
+      <tr><td>Causal mask</td><td>The triangular mask preventing a position from attending to later positions.</td></tr>
+      <tr><td>Head</td><td>One independent attention pattern; models run dozens in parallel.</td></tr>
+      <tr><td>MLP / FFN</td><td>The per-token feed-forward network holding most of the model's parameters.</td></tr>
+      <tr><td>MoE</td><td>Mixture-of-Experts — many expert MLPs, only a few activated per token.</td></tr>
+      <tr><td>Logits</td><td>Raw pre-softmax scores, one per vocabulary entry.</td></tr>
+      <tr><td>Temperature</td><td>Divides logits to sharpen or flatten the sampling distribution.</td></tr>
+      <tr><td>Top-k / top-p</td><td>Truncation rules that limit sampling to the most likely candidates.</td></tr>
+      <tr><td>Prefill</td><td>The parallel pass over the input prompt.</td></tr>
+      <tr><td>Decode</td><td>The sequential pass that produces one new token.</td></tr>
+      <tr><td>KV cache</td><td>Stored key/value vectors for all previous tokens, so they are not recomputed.</td></tr>
+      <tr><td>RoPE</td><td>Rotary position embedding — encodes position by rotating Q and K vectors.</td></tr>
+      <tr><td>GQA / MLA</td><td>Techniques that share KV heads or compress them into a latent, shrinking the cache.</td></tr>
+      <tr><td>Context window</td><td>Maximum number of tokens the model can attend over in one request.</td></tr>
+      <tr><td>Test-time scaling</td><td>Spending more compute at inference — usually by thinking for longer — to raise accuracy.</td></tr>
+    </table>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p><b>Part 1 of 2.</b> Part 2 compares this standard design against DeepSeek V4.1's CED, CSA2, Engram,
+      FP4 caching, SWA Bounded Replay, and DSpark.
+      <a href="https://deepseek-v4-1.dshai.reggilion.com">Open Part 2 →</a></p>
+    <p>Architecture facts about DeepSeek V4.1-Flash and V4 in Part 2 are drawn from the DeepSeek-AI
+      technical reports. This page describes the general transformer design common to all current LLMs;
+      specific models vary in depth, width, attention variant, and training recipe.</p>
+  </div>
+</footer>
+
+</main>
+<script src="app.js"></script>
+</body>
+</html>
