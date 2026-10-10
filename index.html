@@ -123,6 +123,14 @@
   </div>
 </section>
 
+<div class="animcard">
+  <div class="animhead">
+    <span class="pill" style="color:var(--cyan);border-color:var(--cyan)">animated</span>
+    <span class="small muted">Text → token ID → embedding vector. Watch a word become an integer, then become a row of numbers.</span>
+  </div>
+  <canvas id="a1" style="width:100%;height:330px;display:block"></canvas>
+</div>
+
 <section id="embed">
   <div class="wrap">
     <div class="eyebrow">03 · Embeddings</div>
@@ -328,6 +336,14 @@
   </div>
 </section>
 
+<div class="animcard">
+  <div class="animhead">
+    <span class="pill" style="color:var(--cyan);border-color:var(--cyan)">animated</span>
+    <span class="small muted">Raw logits morphing into a probability distribution. Bar heights change; the total settles at 1.00.</span>
+  </div>
+  <canvas id="a2" style="width:100%;height:300px;display:block"></canvas>
+</div>
+
 <section id="sample">
   <div class="wrap">
     <div class="eyebrow">11 · Sampling</div>
@@ -370,6 +386,14 @@
     </div>
   </div>
 </section>
+
+<div class="animcard">
+  <div class="animhead">
+    <span class="pill" style="color:var(--cyan);border-color:var(--cyan)">animated</span>
+    <span class="small muted">Sampling, drawn as a wheel. Slice area is probability; the needle is one draw, and the draw feeds back in.</span>
+  </div>
+  <canvas id="a3" style="width:100%;height:320px;display:block"></canvas>
+</div>
 
 <section id="loop">
   <div class="wrap">
@@ -453,6 +477,14 @@
   </div>
 </section>
 
+<div class="animcard">
+  <div class="animhead">
+    <span class="pill" style="color:var(--cyan);border-color:var(--cyan)">animated</span>
+    <span class="small muted">The KV cache filling token by token. Every new token adds a full column across every layer.</span>
+  </div>
+  <canvas id="a5" style="width:100%;height:330px;display:block"></canvas>
+</div>
+
 <section id="train">
   <div class="wrap">
     <div class="eyebrow">15 · Training</div>
@@ -485,6 +517,14 @@
     </div>
   </div>
 </section>
+
+<div class="animcard">
+  <div class="animhead">
+    <span class="pill" style="color:var(--cyan);border-color:var(--cyan)">animated</span>
+    <span class="small muted">The training loop: a forward pulse predicts every position, a backward pulse assigns blame, and the loss curve falls.</span>
+  </div>
+  <canvas id="a4" style="width:100%;height:330px;display:block"></canvas>
+</div>
 
 <section id="align">
   <div class="wrap">
@@ -635,5 +675,6 @@
 </main>
 <script src="app.js"></script>
 <script src="anim.js"></script>
+<script src="anim2.js"></script>
 </body>
 </html>
