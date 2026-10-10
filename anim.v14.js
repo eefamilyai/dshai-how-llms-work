@@ -59,7 +59,11 @@ function gd(c,W,H,step,al){
   for(var y=0;y<H;y+=step){ c.beginPath(); c.moveTo(0,y); c.lineTo(W,y); c.stroke(); }
 }
 function note(c,txt,W,H){
-  M(c,10.5); c.textAlign='left'; c.fillStyle='rgba(138,156,190,1)';
+  // shrink to fit: a caption can never run off the right edge
+  var maxW=W-48, size=11.5;
+  M(c,size);
+  while(c.measureText(txt).width>maxW && size>7.5){ size-=0.5; M(c,size); }
+  c.textAlign='left'; c.fillStyle='rgba(150,168,202,1)';
   c.fillText(txt, 24, H-20);
 }
 
@@ -123,7 +127,7 @@ A('p1-art', function(c,W,H,t){
       c.fillStyle='rgba(251,191,36,1)'; c.fill();
     }
   }
-  note(c,'text -> ids -> vectors -> layers -> scores -> probabilities -> one draw -> repeat',W,H);
+  note(c,'text → ids → vectors → layers → scores → probabilities → one draw → repeat',W,H);
 });
 
 // ---------- 2 tokenization ----------
@@ -477,7 +481,7 @@ A('p7-art', function(c,W,H,t){
   c.beginPath(); c.moveTo(tx,ty+10); c.quadraticCurveTo((tx+dx)/2, ty+40, dx, dy);
   c.strokeStyle='rgba(34,211,238,.6)'; c.lineWidth=2; c.setLineDash([5,4]); c.stroke();
   c.setLineDash([]);
-  note(c,'the token visits a couple of experts, not all of them - total size grows, per-token cost does not',W,H);
+  note(c,'the token visits a couple of experts, not all of them',W,H);
 });
 
 // ---------- 8 depth ----------
@@ -498,7 +502,7 @@ A('p8-art', function(c,W,H,t){
       c.fillText(i<3?'surface':(i<7?'syntax':(i<11?'facts':'task state')), ox+12, y+bh/2+3.5);
     }
   }
-  note(c,'the same block repeated 60-120 times; abstraction accumulates with depth',W,H);
+  note(c,'the same block, repeated 60–120 times',W,H);
 });
 
 // ---------- 9 logits / softmax ----------
@@ -600,7 +604,7 @@ A('p11-art', function(c,W,H,t){
   c.fillStyle='rgba(143,162,196,.9)';
   c.fillText('linear in', rx, padT+84);
   c.fillText('context', rx, padT+100);
-  note(c,'every new token adds one full column across every layer - this is what makes generation possible',W,H);
+  note(c,'every new token adds one full column across every layer',W,H);
 });
 
 // ---------- 12 training ----------
@@ -648,7 +652,7 @@ A('p12-art', function(c,W,H,t){
   c.textAlign='right'; c.fillStyle='rgba(52,211,153,1)';
   c.fillText('step '+Math.round(ph/PER*90), gx+gw-4, gy+14);
   M(c,10.5); c.textAlign='left'; c.fillStyle='rgba(85,97,128,1)';
-  c.fillText('predict the next token  ->  measure the error  ->  nudge every weight  ->  repeat', lx, H-14);
+  c.fillText('predict  →  measure error  →  nudge every weight  →  repeat', lx, H-14);
 });
 
 // ---------- 13 cost ----------
