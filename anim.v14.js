@@ -486,23 +486,81 @@ A('p7-art', function(c,W,H,t){
 
 // ---------- 8 depth ----------
 A('p8-art', function(c,W,H,t){
-  c.clearRect(0,0,W,H);
-  var L=14, bw=Math.min(320,W*.46);
-  var ox=W*.5-bw/2, oy=40, bh=(H-96)/L-3;
-  var wave=Math.floor(((t*1.05)%(L+6)));
-  for(var i=0;i<L;i++){
-    var y=oy+i*(bh+3), on=i<=wave, hue=222-(i/L)*48;
-    bx(c,ox,y,bw,bh,5);
-    c.fillStyle= on ? 'hsla('+hue+',72%,52%,.8)' : 'rgba(11,17,32,.85)'; c.fill();
-    if(!on){ c.strokeStyle='rgba(24,35,58,1)'; c.lineWidth=1; c.stroke(); }
-    if(on&&i===wave){ c.strokeStyle='rgba(251,191,36,1)'; c.lineWidth=2; c.stroke(); }
-    if(bh>13){
-      M(c,10); c.textAlign='left';
-      c.fillStyle= on?'rgba(4,6,12,.9)':'rgba(85,97,128,1)';
-      c.fillText(i<3?'surface':(i<7?'syntax':(i<11?'facts':'task state')), ox+12, y+bh/2+3.5);
+  c.clearRect(0,0,W,H); gd(c,W,H,58,.10);
+
+  // Four named stages of the stack. Each is a band of layers, labelled, with the
+  // residual stream drawn as a continuous rail down the left so the "same stream,
+  // edited at every stop" idea is visible rather than implied.
+  var STAGES=[
+    {n:15, label:'surface form',     sub:'token identity, spelling',      hue:210},
+    {n:25, label:'syntax',           sub:'trees, coreference, agreement', hue:222},
+    {n:30, label:'facts & reasoning',sub:'entities, chains of thought',   hue:238},
+    {n:20, label:'task state',       sub:'output format, what to do next',hue:256}
+  ];
+  var TOTAL=STAGES.reduce(function(s,x){return s+x.n;},0);
+
+  var padL=Math.min(210,W*0.24), padR=180, padT=54, padB=52;
+  var gw=W-padL-padR, gh=H-padT-padB;
+
+  // the residual rail
+  var railX=padL-30;
+  c.beginPath(); c.moveTo(railX,padT-8); c.lineTo(railX,padT+gh+8);
+  c.strokeStyle='rgba(77,107,254,.45)'; c.lineWidth=2; c.stroke();
+  M(c,10.5); c.textAlign='left'; c.fillStyle='rgba(124,147,255,.9)';
+  c.fillText('residual stream', railX-4, padT-20);
+
+  var wave=(t*0.9)%(TOTAL+14);
+  var y=padT;
+  for(var s=0;s<STAGES.length;s++){
+    var st=STAGES[s];
+    var h=(st.n/TOTAL)*gh;
+    var on = wave > (y-padT)/gh*TOTAL;
+    var isNow = on && wave <= (y-padT+h)/gh*TOTAL;
+
+    // band
+    bx(c,padL,y+2,gw,h-4,7);
+    c.fillStyle='hsla('+st.hue+','+(on?62:18)+'%,'+(on?52:14)+'%,'+(on?0.72:0.30)+')';
+    c.fill();
+    if(isNow){ c.strokeStyle='rgba(251,191,36,1)'; c.lineWidth=2; c.stroke(); }
+
+    // layer ticks inside the band
+    var ticks=Math.min(st.n, 15);
+    for(var k=1;k<ticks;k++){
+      var tx=padL+ (k/ticks)*gw;
+      c.beginPath(); c.moveTo(tx,y+8); c.lineTo(tx,y+h-8);
+      c.strokeStyle='rgba(6,9,17,.30)'; c.lineWidth=1; c.stroke();
     }
+
+    // label on the band
+    M(c,Math.min(13,gw/30),700); c.textAlign='left';
+    c.fillStyle= on?'rgba(6,9,17,.95)':'rgba(150,165,195,.9)';
+    c.fillText('layers  '+st.n, padL+14, y+h/2-4);
+    S(c,Math.min(14,gw/26));
+    c.fillStyle= on?'rgba(6,9,17,.85)':'rgba(120,135,168,.9)';
+    c.fillText(st.label, padL+14, y+h/2+16);
+
+    // right-hand annotation
+    M(c,10.5); c.textAlign='left';
+    c.fillStyle= on?'rgba(188,208,255,.95)':'rgba(90,104,136,.85)';
+    c.fillText(st.sub, padL+gw+14, y+h/2+4);
+
+    // node on the rail
+    c.beginPath(); c.arc(railX, y+h/2, isNow?7:5, 0, Math.PI*2);
+    c.fillStyle= isNow?'#fbbf24':(on?'#7c93ff':'#39435c'); c.fill();
+
+    y+=h;
   }
-  note(c,'the same block, repeated 60–120 times',W,H);
+
+  // total depth readout
+  M(c,11); c.textAlign='right'; c.fillStyle='rgba(150,165,195,.95)';
+  c.fillText(TOTAL+' layers total', W-30, padT-20);
+
+  // footer: what depth buys and what it costs
+  M(c,11); c.textAlign='left'; c.fillStyle='rgba(150,168,202,1)';
+  var msg = wave>TOTAL
+    ? 'depth is where abstraction accumulates \u2014 and where cost accumulates too'
+    : 'the same block repeated, stage after stage';
+  c.fillText(msg, 24, H-20);
 });
 
 // ---------- 9 logits / softmax ----------
