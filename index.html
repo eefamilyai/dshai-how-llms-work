@@ -537,6 +537,59 @@
   </div>
 </section>
 
+
+<section id="live">
+  <div class="wrap">
+    <div class="eyebrow">Live · animated</div>
+    <h2>Watch a token travel</h2>
+    <p class="one-line">Eight tokens descending through ten layers. Attention links light up as they go.</p>
+    <p>Each dot is one token's vector moving down the stack. As a row of dots reaches a layer, the arcs
+      show which earlier tokens it is pulling information from — and how that pattern shifts with depth.
+      Early layers link locally; deeper layers reach further back.</p>
+    <div class="card" style="padding:10px">
+      <canvas id="streamCanvas" style="width:100%;height:440px;display:block"></canvas>
+    </div>
+    <div class="grid g3" style="margin-top:18px">
+      <div class="card"><div class="pill" style="color:var(--cyan);border-color:var(--cyan)">the arcs</div>
+        <p class="small" style="margin-top:10px">A curve from token <span class="mono">j</span> to token
+        <span class="mono">i</span> means <span class="mono">i</span> is reading from
+        <span class="mono">j</span>. Brighter and thicker means more weight.</p></div>
+      <div class="card"><div class="pill" style="color:var(--amber);border-color:var(--amber)">the dot</div>
+        <p class="small" style="margin-top:10px">The moving dot is the residual stream at that position —
+        the vector every layer reads from and adds to.</p></div>
+      <div class="card"><div class="pill" style="color:var(--green);border-color:var(--green)">the exit</div>
+        <p class="small" style="margin-top:10px">Only the last position's vector leaves the stack to
+        become a prediction. Every other position was training signal.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="typing">
+  <div class="wrap">
+    <div class="eyebrow">Live · animated</div>
+    <h2>Generation, one token at a time</h2>
+    <p class="one-line">The loop from section 12, running in front of you.</p>
+    <div class="grid g2" style="align-items:start">
+      <div class="card">
+        <div class="mono" id="genOut" style="font-size:15px;line-height:1.9;min-height:130px;color:var(--ink)"></div>
+        <div style="margin-top:14px;display:flex;gap:8px">
+          <button class="btn" id="genGo">▶ Generate</button>
+          <button class="btn ghost" id="genClear">Clear</button>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <div class="small muted" style="margin-bottom:6px">top prediction at each step</div>
+          <div class="bars" id="genBars"></div>
+        </div>
+        <p class="small muted" style="margin-top:12px">Every token is one full forward pass through the
+          model. Watch the probabilities: the model is confident on the easy tokens and spreads its bets
+          where the sentence could plausibly go several ways.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section id="glossary">
   <div class="wrap">
     <div class="eyebrow">18 · Glossary</div>
@@ -579,5 +632,6 @@
 
 </main>
 <script src="app.js"></script>
+<script src="anim.js"></script>
 </body>
 </html>
