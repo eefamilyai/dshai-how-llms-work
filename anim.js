@@ -259,60 +259,129 @@ A('p2-art', function(c,W,H,t){
 
 // ---------- 3 embeddings ----------
 A('p3-art', function(c,W,H,t){
-  c.clearRect(0,0,W,H); gd(c,W,H,50,.18);
-  var Wd=[['cat',-.62,-.18],['dog',-.55,-.06],['kitten',-.70,-.30],
-          ['king',.34,.42],['queen',.30,.52],['man',.22,.44],['woman',.18,.55],
-          ['Paris',.62,-.38],['France',.70,-.30]];
-  var cx=W*.5, cy=H*.52, sc=Math.min(W,H)*.38;
-  c.beginPath(); c.moveTo(24,cy); c.lineTo(W-24,cy); c.moveTo(cx,24); c.lineTo(cx,H-24);
-  c.strokeStyle='rgba(24,35,58,.9)'; c.lineWidth=1; c.stroke();
-  var pulse=.5+.5*Math.sin(t*1.6);
-  for(var i=0;i<Wd.length;i++){
-    var w=Wd[i], x=cx+w[1]*sc, y=cy-w[2]*sc, r=6+2.5*pulse;
-    var g=c.createRadialGradient(x,y,0,x,y,r*4);
-    g.addColorStop(0,'rgba(34,211,238,.4)'); g.addColorStop(1,'rgba(0,0,0,0)');
-    c.fillStyle=g; c.beginPath(); c.arc(x,y,r*4,0,Math.PI*2); c.fill();
-    c.beginPath(); c.arc(x,y,r,0,Math.PI*2); c.fillStyle='#7c93ff'; c.fill();
-    M(c,11.5); c.textAlign='center'; c.fillStyle='rgba(238,243,255,.94)';
-    c.fillText(w[0], x, y-r-9);
+  c.clearRect(0,0,W,H); gd(c,W,H,58,.10);
+
+  // Hand-placed semantic map. Every position and label side is chosen so that
+  // no two labels can overlap, at any canvas size.
+  //   [word, x, y, side]   x,y in -1..1
+  var PTS=[
+    ['kitten', -0.78, -0.62, 'l'],
+    ['cat',    -0.60, -0.30, 'l'],
+    ['dog',    -0.40, -0.08, 'l'],
+    ['man',     0.06,  0.22, 'b'],
+    ['king',    0.50,  0.18, 'r'],
+    ['woman',   0.12,  0.66, 'b'],
+    ['queen',   0.56,  0.62, 'r'],
+    ['Paris',   0.64, -0.50, 'r'],
+    ['France',  0.84, -0.78, 'r']
+  ];
+  var cx=W*0.48, cy=H*0.54, sc=Math.min(W*0.40,H*0.40);
+
+  function P(nm){
+    for(var i=0;i<PTS.length;i++) if(PTS[i][0]===nm)
+      return {x:cx+PTS[i][1]*sc, y:cy-PTS[i][2]*sc};
+    return {x:cx,y:cy};
   }
-  var x1=cx+Wd[3][1]*sc, y1=cy-Wd[3][2]*sc, x2=cx+Wd[5][1]*sc, y2=cy-Wd[5][2]*sc;
-  var x3=cx+Wd[4][1]*sc, y3=cy-Wd[4][2]*sc, dx=x2-x1, dy=y2-y1;
-  c.beginPath(); c.moveTo(x3,y3); c.lineTo(x3+dx,y3+dy);
-  c.strokeStyle='rgba(251,191,36,.7)'; c.lineWidth=2; c.setLineDash([6,5]); c.stroke();
-  c.setLineDash([]);
-  c.beginPath(); c.arc(x3+dx,y3+dy,7,0,Math.PI*2);
-  c.strokeStyle='rgba(251,191,36,1)'; c.lineWidth=2; c.stroke();
-  M(c,11); c.textAlign='center'; c.fillStyle='rgba(251,191,36,.95)';
-  c.fillText('king - man + woman ~ queen', x3+dx, y3+dy-16);
-  note(c,'direction carries meaning; each word is a point in a few thousand dimensions',W,H);
+
+  // axes
+  c.beginPath(); c.moveTo(26,cy); c.lineTo(W-26,cy);
+  c.moveTo(cx,24); c.lineTo(cx,H-26);
+  c.strokeStyle='rgba(32,47,76,1)'; c.lineWidth=1; c.stroke();
+
+  // the analogy: two parallel arrows
+  var pairs=[['man','woman'],['king','queen']];
+  for(var q=0;q<pairs.length;q++){
+    var A0=P(pairs[q][0]), B0=P(pairs[q][1]);
+    c.beginPath(); c.moveTo(A0.x,A0.y); c.lineTo(B0.x,B0.y);
+    c.strokeStyle='rgba(251,191,36,.9)'; c.lineWidth=3; c.stroke();
+    var ang=Math.atan2(B0.y-A0.y,B0.x-A0.x);
+    c.beginPath();
+    c.moveTo(B0.x,B0.y);
+    c.lineTo(B0.x-13*Math.cos(ang-0.42), B0.y-13*Math.sin(ang-0.42));
+    c.lineTo(B0.x-13*Math.cos(ang+0.42), B0.y-13*Math.sin(ang+0.42));
+    c.closePath(); c.fillStyle='rgba(251,191,36,1)'; c.fill();
+  }
+
+  // points, then labels drawn clear of the cluster
+  var pulse=0.5+0.5*Math.sin(t*1.6);
+  for(var i=0;i<PTS.length;i++){
+    var w0=PTS[i][0], x=cx+PTS[i][1]*sc, y=cy-PTS[i][2]*sc, side=PTS[i][3];
+    var r=6.5+2.5*pulse;
+    var g=c.createRadialGradient(x,y,0,x,y,r*4);
+    g.addColorStop(0,'rgba(34,211,238,.40)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    c.fillStyle=g; c.beginPath(); c.arc(x,y,r*4,0,Math.PI*2); c.fill();
+
+    c.beginPath(); c.arc(x,y,r,0,Math.PI*2);
+    c.fillStyle='#8aa0ff'; c.fill();
+
+    M(c,14,700);
+    c.fillStyle='rgba(240,245,255,1)';
+    if(side==='r'){ c.textAlign='left';   c.fillText(w0, x+14, y+5); }
+    else if(side==='l'){ c.textAlign='right'; c.fillText(w0, x-14, y+5); }
+    else { c.textAlign='center'; c.fillText(w0, x, y+30); }
+  }
+
+  // the analogy statement, anchored top-right where nothing else lives
+  M(c,12.5,700); c.textAlign='right';
+  c.fillStyle='rgba(251,191,36,1)';
+  c.fillText('man \u2192 woman', W-26, 32);
+  c.fillText('king \u2192 queen', W-26, 52);
+  M(c,11); c.fillStyle='rgba(150,165,195,1)';
+  c.fillText('same direction, same meaning shift', W-26, 72);
+
+  note(c,'meaning lives in the direction of the vector \u2014 not in any single number',W,H);
 });
 
 // ---------- 4 attention ----------
 A('p4-art', function(c,W,H,t){
-  c.clearRect(0,0,W,H); gd(c,W,H,46,.16);
-  var N=9, CY=H*.52, pad=Math.min(90,W*.09), gap=(W-pad*2)/(N-1);
+  c.clearRect(0,0,W,H); gd(c,W,H,58,.10);
+  var N=9, CY=H*0.52;
+  var pad=Math.min(96,W*0.10);
+  var gap=(W-pad*2)/(N-1);
   var X=function(i){ return pad+i*gap; };
-  var PER=5, ph=(t%PER)/PER, focus=Math.min(N-1, Math.floor(ph*N));
-  for(var i=0;i<N;i++){
-    var r= i===focus?10:6.5;
-    c.beginPath(); c.arc(X(i),CY,r,0,Math.PI*2);
-    c.fillStyle= i===focus?'#fbbf24':'#39435c'; c.fill();
-  }
-  for(var j=0;j<focus;j++){
-    var wt=(j===focus-1)?.85:.10*Math.pow(.78,focus-j);
-    if(focus===8&&j===1) wt=.95;
-    var a=Math.min(1,wt*1.5), x1=X(j), x2=X(focus), mx=(x1+x2)/2, my=CY-Math.min(56,gap*1.1);
-    c.beginPath(); c.moveTo(x1,CY-8); c.quadraticCurveTo(mx,my,x2,CY-8);
-    c.strokeStyle='rgba(34,211,238,'+a.toFixed(2)+')'; c.lineWidth=.8+wt*4; c.stroke();
-  }
+
+  // The animation completes by the end of its animated window, so the HELD frame
+  // always shows the full coreference example the caption describes.
+  var PER=5.0, ph=(t%PER)/PER, ANIM=0.55;
+  var focus=Math.min(N-1, Math.floor((ph/ANIM)*N));
+
+  // the sentence
   var lab=['The','cat','sat','on','the','mat','because','it','slept'];
-  M(c,11.5); c.textAlign='center';
-  for(var k=0;k<N;k++){
-    c.fillStyle= k===focus?'rgba(251,191,36,1)':(k<focus?'rgba(143,162,196,.9)':'rgba(85,97,128,.65)');
-    c.fillText(lab[k], X(k), CY+32);
+
+  // arcs from the focused token back to everything it reads
+  for(var j=0;j<focus;j++){
+    var wt=(j===focus-1) ? 0.62 : 0.10*Math.pow(0.80,focus-j);
+    if(focus===8 && j===1) wt=1.0;              // "slept" -> "cat"
+    if(focus===8 && j===7) wt=0.55;             // "slept" -> "it"
+    var al=Math.min(1, 0.30 + wt*0.85);
+    var x1=X(j), x2=X(focus);
+    var mx=(x1+x2)/2, my=CY - Math.min(72, gap*1.5);
+    c.beginPath(); c.moveTo(x1,CY-9); c.quadraticCurveTo(mx,my,x2,CY-9);
+    c.strokeStyle='rgba(34,211,238,'+al.toFixed(2)+')';
+    c.lineWidth=1.6+wt*5.5; c.stroke();
   }
-  note(c,'"slept" reaches back to "cat" - who did the sleeping is learned, not given',W,H);
+
+  // tokens
+  for(var i=0;i<N;i++){
+    var on=(i===focus);
+    var r=on?11:6.5;
+    if(on){
+      var g=c.createRadialGradient(X(i),CY,0,X(i),CY,r*3.4);
+      g.addColorStop(0,'rgba(251,191,36,.5)'); g.addColorStop(1,'rgba(0,0,0,0)');
+      c.fillStyle=g; c.beginPath(); c.arc(X(i),CY,r*3.4,0,Math.PI*2); c.fill();
+    }
+    c.beginPath(); c.arc(X(i),CY,r,0,Math.PI*2);
+    c.fillStyle= on ? '#fbbf24' : (i<focus ? '#6b83d6' : '#39435c'); c.fill();
+  }
+
+  M(c,12.5,700); c.textAlign='center';
+  for(var k=0;k<N;k++){
+    c.fillStyle = k===focus ? 'rgba(251,191,36,1)'
+                : (k<focus ? 'rgba(190,205,235,.95)' : 'rgba(96,110,142,.8)');
+    c.fillText(lab[k], X(k), CY+34);
+  }
+
+  note(c,'"slept" reaches back to "cat" \u2014 who did the sleeping is learned, not given',W,H);
 });
 
 // ---------- 5 causal mask ----------
@@ -338,30 +407,46 @@ A('p5-art', function(c,W,H,t){
 
 // ---------- 6 multi-head ----------
 A('p6-art', function(c,W,H,t){
-  c.clearRect(0,0,W,H); gd(c,W,H,50,.14);
+  c.clearRect(0,0,W,H); gd(c,W,H,58,.10);
   var HD=['previous token','coreference','syntax','delimiters'];
-  var n=16, cell=Math.min((W-160)/4/ n * 1.35, H/5.2);
-  var tot=cell*n, gapx=(W-tot*4-120)/3, oy=H*.30;
-  var pulse=.55+.45*Math.sin(t*2);
+  var n=16;
+  var gapx=Math.max(24, W*0.045);
+  var side=W-90;                               // usable width
+  var cell=Math.min((side-gapx*3)/(4*n), (H-150)/n);
+  var tot=cell*n;
+  var totalW=tot*4+gapx*3;
+  var ox0=(W-totalW)/2;
+  var oy=Math.max(66, (H-tot)/2 + 8);
+  var pulse=0.6+0.4*Math.sin(t*2);
+
   for(var h=0;h<4;h++){
-    var ox=60+h*(tot+gapx);
-    for(var r=0;r<n;r++) for(var cc=0;cc<n;cc++){
-      c.beginPath(); c.rect(ox+cc*cell+.6, oy+r*cell+.6, cell-1.2, cell-1.2);
-      var on=false;
-      if(cc<=r){
-        if(h===0) on=(cc===r-1);
-        else if(h===1) on=(cc===0||(r>10&&cc===3));
-        else if(h===2) on=(cc===r||(r-cc)%4===0);
-        else on=(cc===r)||((r*cc)%7===0);
+    var ox=ox0+h*(tot+gapx);
+    for(var r=0;r<n;r++){
+      for(var cc=0;cc<n;cc++){
+        var visible = cc<=r;
+        c.beginPath();
+        c.rect(ox+cc*cell+0.7, oy+r*cell+0.7, cell-1.4, cell-1.4);
+        if(visible){
+          var strong=false;
+          if(h===0) strong=(cc===r-1);
+          else if(h===1) strong=(cc===0)||(r>10&&cc===3);
+          else if(h===2) strong=(cc===r)||((r-cc)%4===0);
+          else strong=(cc===r)||((r*cc)%7===0);
+          if(strong){
+            c.fillStyle = (cc===r) ? 'rgba(251,191,36,.95)'
+                                   : 'hsla(212,85%,62%,'+(0.65+0.3*pulse)+')';
+          } else if(cc<r){
+            c.fillStyle='rgba(40,56,92,.55)';
+          } else c.fillStyle='rgba(16,24,42,.9)';
+        } else c.fillStyle='rgba(10,15,28,.9)';
+        c.fill();
       }
-      c.fillStyle = on ? (cc===r?'rgba(251,191,36,.9)':'hsla(212,80%,60%,'+(.5+.35*pulse)+')')
-                       : 'rgba(11,17,32,.9)';
-      c.fill();
     }
-    M(c,11); c.textAlign='center'; c.fillStyle='rgba(143,162,196,.92)';
-    c.fillText(HD[h], ox+tot/2, oy-12);
+    M(c,11.5,700); c.textAlign='center';
+    c.fillStyle='rgba(165,180,210,1)';
+    c.fillText(HD[h], ox+tot/2, oy-14);
   }
-  note(c,'dozens of these run in parallel; each one learns a different relationship',W,H);
+  note(c,'dozens of these run in parallel \u2014 each one learns a different relationship',W,H);
 });
 
 // ---------- 7 MoE ----------
