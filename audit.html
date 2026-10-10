@@ -1,48 +1,42 @@
 <!doctype html><html><head><meta charset="utf-8"><title>AUDIT</title>
-<style>body{margin:0;background:#04060c}canvas{display:none}
-#out{color:#8fa2c4;font:12px monospace;white-space:pre;padding:10px}</style></head><body>
-<canvas id="hero-art" width="720" height="450"></canvas>
-<canvas id="p1-art" width="720" height="450"></canvas>
-<canvas id="p2-art" width="720" height="450"></canvas>
-<canvas id="p3-art" width="720" height="450"></canvas>
-<canvas id="p4-art" width="720" height="450"></canvas>
-<canvas id="p5-art" width="720" height="450"></canvas>
-<canvas id="p6-art" width="720" height="450"></canvas>
-<canvas id="p7-art" width="720" height="450"></canvas>
-<canvas id="p8-art" width="720" height="450"></canvas>
-<canvas id="p9-art" width="720" height="450"></canvas>
-<canvas id="p10-art" width="720" height="450"></canvas>
-<canvas id="p11-art" width="720" height="450"></canvas>
-<canvas id="p12-art" width="720" height="450"></canvas>
-<canvas id="p13-art" width="720" height="450"></canvas><pre id="out">running</pre>
-<script src="anim.js?v=7"></script>
+<style>body{margin:0;background:#04060c}
+.c{position:absolute;border:1px solid #1b2740}
+#out{position:fixed;left:4px;bottom:0;color:#22d3ee;font:11px monospace;white-space:pre;z-index:9}
+</style></head><body>
+<div class="c" style="left:4px;top:30px"><canvas id="hero-art" width="280" height="175" style="width:280px;height:175px"></canvas></div>
+<div class="c" style="left:290px;top:30px"><canvas id="p1-art" width="280" height="175" style="width:280px;height:175px"></canvas></div>
+<div class="c" style="left:576px;top:30px"><canvas id="p2-art" width="280" height="175" style="width:280px;height:175px"></canvas></div>
+<div class="c" style="left:862px;top:30px"><canvas id="p3-art" width="280" height="175" style="width:280px;height:175px"></canvas></div>
+<div class="c" style="left:1148px;top:30px"><canvas id="p4-art" width="280" height="175" style="width:280px;height:175px"></canvas></div>
+<div class="c" style="left:4px;top:230px"><canvas id="p5-art" width="280" height="175" style="width:280px;height:175px"></canvas></div>
+<div class="c" style="left:290px;top:230px"><canvas id="p6-art" width="280" height="175" style="width:280px;height:175px"></canvas></div>
+<div class="c" style="left:576px;top:230px"><canvas id="p7-art" width="280" height="175" style="width:280px;height:175px"></canvas></div>
+<div class="c" style="left:862px;top:230px"><canvas id="p8-art" width="280" height="175" style="width:280px;height:175px"></canvas></div>
+<div class="c" style="left:1148px;top:230px"><canvas id="p9-art" width="280" height="175" style="width:280px;height:175px"></canvas></div>
+<div class="c" style="left:4px;top:430px"><canvas id="p10-art" width="280" height="175" style="width:280px;height:175px"></canvas></div>
+<div class="c" style="left:290px;top:430px"><canvas id="p11-art" width="280" height="175" style="width:280px;height:175px"></canvas></div>
+<div class="c" style="left:576px;top:430px"><canvas id="p12-art" width="280" height="175" style="width:280px;height:175px"></canvas></div>
+<div class="c" style="left:862px;top:430px"><canvas id="p13-art" width="280" height="175" style="width:280px;height:175px"></canvas></div><pre id="out">...</pre>
+<script src="anim.js?v=8"></script>
 <script>
-var IDS=["hero-art","p1-art","p2-art","p3-art","p4-art","p5-art","p6-art","p7-art","p8-art","p9-art","p10-art","p11-art","p12-art","p13-art"];
-function stats(id){
+var IDS="hero-art","p1-art","p2-art","p3-art","p4-art","p5-art","p6-art","p7-art","p8-art","p9-art","p10-art","p11-art","p12-art","p13-art";
+function st(id){
   var cv=document.getElementById(id), c=cv.getContext("2d");
   var W=cv.width,H=cv.height,d=c.getImageData(0,0,W,H).data;
-  var bright=0,mid=0,dark=0,lumSum=0,n=0;
+  var lum=0,n=0,br=0;
   for(var y=0;y<H;y+=2)for(var x=0;x<W;x+=2){
     var i=(y*W+x)*4,r=d[i],g=d[i+1],b=d[i+2],a=d[i+3]; if(a<10)continue;
-    var lum=0.299*r+0.587*g+0.114*b; n++; lumSum+=lum;
-    if(lum>150)bright++; else if(lum>70)mid++; else dark++;
+    var L=0.299*r+0.587*g+0.114*b; n++; lum+=L; if(L>150)br++;
   }
-  return {mean:lumSum/n, brightPct:100*bright/n, midPct:100*mid/n};
+  return n?(lum/n):0;
 }
 setTimeout(function(){
-  var lines=[], order=[];
-  for(var k=0;k<IDS.length;k++){
-    var s=stats(IDS[k]);
-    order.push([IDS[k], s]);
-  }
-  order.sort(function(a,b){return a[1].mean-b[1].mean;});
-  for(var j=0;j<order.length;j++){
-    var id=order[j][0], s=order[j][1];
-    var flag = s.mean<20?"  <-- TOO DIM":(s.mean<35?"  <- dim":"");
-    lines.push(id.padEnd(12)+" meanLum="+s.mean.toFixed(1).padStart(6)+
-      "  bright%="+s.brightPct.toFixed(1).padStart(5)+
-      "  mid%="+s.midPct.toFixed(1).padStart(5)+flag);
-  }
-  document.getElementById("out").textContent=lines.join("\n");
-}, 7000);
+  var rows=[], tot=0;
+  for(var i=0;i<IDS.length;i++){ var m=st(IDS[i]); rows.push([IDS[i],m]); tot+=m; }
+  rows.sort(function(a,b){return a[1]-b[1];});
+  var out=rows.map(function(r){
+    var f = r[1]<16?"  <-- TOO DIM":(r[1]<28?"  <- dim":"");
+    return r[0].padEnd(11)+" meanLum="+r[1].toFixed(1).padStart(6)+f; }).join("\n");
+  document.getElementById("out").textContent=out+"\nAVG "+((tot/IDS.length)).toFixed(1);
+}, 9000);
 </script></body></html>

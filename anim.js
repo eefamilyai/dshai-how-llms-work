@@ -1,4 +1,22 @@
 
+// cycle length (seconds) and the fraction spent animating; the rest holds the final frame
+window.__PLATE_HOLD = {
+  'hero-art':[9.0,1.00],
+  'p1-art':  [4.7,0.62],
+  'p2-art':  [13.0,1.00],
+  'p3-art':  [6.0,0.55],
+  'p4-art':  [5.0,0.55],
+  'p5-art':  [8.2,0.55],
+  'p6-art':  [6.0,0.55],
+  'p7-art':  [9.2,0.55],
+  'p8-art':  [19.0,0.55],
+  'p9-art':  [6.0,0.50],
+  'p10-art': [3.8,0.72],
+  'p11-art': [8.3,0.62],
+  'p12-art': [4.4,0.62],
+  'p13-art': [7.0,0.72]
+};
+
 // ---------- tiny toolkit ----------
 function A(id, draw){
   var cv=document.getElementById(id); if(!cv) return;
@@ -15,7 +33,17 @@ function A(id, draw){
   } else on=true;
   var R=matchMedia('(prefers-reduced-motion: reduce)').matches, t0=performance.now();
   var FZ=(function(){ var m=location.search.match(/freeze=([0-9.]+)/); return m?parseFloat(m[1]):null; })();
-  (function lp(n){ if(on){ try{ draw(c,W,H, FZ!==null?FZ:(n-t0)/1000, R); }catch(e){} } requestAnimationFrame(lp); })(t0);
+  // Each plate runs its animation for the first ANIM_FRAC of a cycle, then holds the
+  // finished, readable state for the remainder — so a reader who glances at any moment
+  // sees a complete illustration rather than a half-drawn one.
+  var HOLD=window.__PLATE_HOLD && window.__PLATE_HOLD[id];
+  function held(sec){
+    if(!HOLD) return sec;
+    var cyc=HOLD[0], frac=HOLD[1], rest=cyc*frac;
+    var k=sec%cyc;
+    return k<rest ? k : rest;
+  }
+  (function lp(n){ if(on){ try{ draw(c,W,H, FZ!==null?FZ:held((n-t0)/1000), R); }catch(e){} } requestAnimationFrame(lp); })(t0);
 }
 function bx(c,x,y,w,h,r){ r=Math.min(r,w/2,h/2);
   c.beginPath(); c.moveTo(x+r,y);
@@ -31,7 +59,7 @@ function gd(c,W,H,step,al){
   for(var y=0;y<H;y+=step){ c.beginPath(); c.moveTo(0,y); c.lineTo(W,y); c.stroke(); }
 }
 function note(c,txt,W,H){
-  M(c,10.5); c.textAlign='left'; c.fillStyle='rgba(85,97,128,1)';
+  M(c,10.5); c.textAlign='left'; c.fillStyle='rgba(138,156,190,1)';
   c.fillText(txt, 24, H-20);
 }
 
