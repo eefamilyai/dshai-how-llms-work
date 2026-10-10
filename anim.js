@@ -99,37 +99,128 @@ A('p1-art', function(c,W,H,t){
 
 // ---------- 2 tokenization ----------
 A('p2-art', function(c,W,H,t){
-  c.clearRect(0,0,W,H); gd(c,W,H,44,.18);
-  var WORD='unbelievably', P=['un','believ','ably'];
-  var PER=3.6, ph=(t%PER)/PER, cut= ph<.5?ph/.5:1, cy=H*.44;
-  var fs=Math.min(54,W/14);
-  S(c,fs);
-  var m=c.measureText(WORD).width, x0=W/2-m/2;
-  c.textAlign='left'; c.fillStyle='rgba(238,243,255,1)';
-  c.fillText(WORD, x0, cy);
-  var w1=c.measureText(P[0]).width, w2=c.measureText(P[1]).width;
-  var cuts=[x0+w1, x0+w1+w2];
-  for(var i=0;i<2;i++){
-    if(cut<=(i+1)/3) continue;
-    c.beginPath(); c.moveTo(cuts[i], cy-fs*.85); c.lineTo(cuts[i], cy+fs*.2);
-    c.strokeStyle='rgba(251,191,36,.95)'; c.lineWidth=2.5; c.setLineDash([5,4]); c.stroke();
-    c.setLineDash([]);
-  }
-  if(ph>.42){
-    var a=Math.min(1,(ph-.42)/.2);
-    var cw=Math.min(150,W*.2), ch=54, tot=cw*3+24;
-    for(var j=0;j<3;j++){
-      var bxx=W/2-tot/2+j*(cw+12);
-      bx(c,bxx,cy+fs*.72,cw,ch,9);
-      c.fillStyle='rgba(13,23,48,'+(.55+.45*a)+')'; c.fill();
-      c.strokeStyle='rgba(77,107,254,'+(.4+.6*a)+')'; c.lineWidth=1.6; c.stroke();
-      M(c,15,700); c.textAlign='center'; c.fillStyle='rgba(238,243,255,'+a+')';
-      c.fillText(P[j], bxx+cw/2, cy+fs*.72+25);
-      M(c,10); c.fillStyle='rgba(251,191,36,'+(.85*a)+')';
-      c.fillText('#'+(140000+j*9113), bxx+cw/2, cy+fs*.72+43);
+  c.clearRect(0,0,W,H);
+  gd(c,W,H,56,.10);
+
+  var PER=12.5, ph=(t%PER)/PER;
+  var sIn  = Math.min(1, ph/0.10);                                   // text arrives
+  var sCut = Math.min(1, Math.max(0,(ph-0.14)/0.11));                // knife drops
+  var sSep = Math.min(1, Math.max(0,(ph-0.27)/0.11));                // pieces pull apart
+  var sNum = Math.min(1, Math.max(0,(ph-0.42)/0.22));                // ids count up
+
+  var ROWS=[
+    {lab:'COMMON WORD   \u00b7   STAYS WHOLE',
+     col:'rgba(52,211,153,1)', dim:'rgba(52,211,153,.30)',
+     pcs:['The',' cat',' sat'], ids:[1824,3797,3332], cut:false},
+    {lab:'RARE WORD   \u00b7   CUT APART',
+     col:'rgba(251,191,36,1)', dim:'rgba(251,191,36,.30)',
+     pcs:['un','believ','ably'], ids:[530,24102,8901], cut:true}
+  ];
+
+  var fs = Math.min(60, W/16.5);
+  var gap = fs*0.44;
+  var ys = [H*0.29, H*0.73];
+
+  for(var r=0;r<ROWS.length;r++){
+    var row=ROWS[r], baseY=ys[r];
+
+    // measure pieces at the display font
+    S(c,fs);
+    var widths=[];
+    for(var k=0;k<row.pcs.length;k++) widths.push(c.measureText(row.pcs[k]).width);
+    var sum=0; for(var q=0;q<widths.length;q++) sum+=widths[q];
+    var total = sum + gap*(row.pcs.length-1)*sSep;
+    var x0 = W*0.5 - total/2;
+
+    // ---- row label ----
+    M(c,11.5); c.textAlign='left';
+    c.globalAlpha=sIn; c.fillStyle=row.col;
+    c.fillText(row.lab, 60, baseY - fs*1.22);
+    c.globalAlpha=1;
+
+    // ---- cut marks (rare row only) ----
+    if(row.cut && sCut>0){
+      var fade = Math.max(0, 1 - sSep*2.0);
+      var cm = x0;
+      for(var j=0;j<row.pcs.length-1;j++){
+        cm += widths[j] + gap*sSep*0.5;
+        // blade
+        c.beginPath();
+        c.moveTo(cm, baseY - fs*0.98);
+        c.lineTo(cm, baseY + fs*0.14);
+        c.strokeStyle='rgba(251,191,36,'+(0.95*fade).toFixed(3)+')';
+        c.lineWidth=2.5; c.setLineDash([7,6]); c.stroke(); c.setLineDash([]);
+        // sparks at the cut point
+        if(fade>0.15){
+          for(var s2=0;s2<3;s2++){
+            var ang=-Math.PI/2 + (s2-1)*0.7;
+            var rr2 = fs*0.30*(1-fade+0.35);
+            c.beginPath();
+            c.moveTo(cm, baseY-fs*0.42);
+            c.lineTo(cm+Math.cos(ang)*rr2, baseY-fs*0.42+Math.sin(ang)*rr2);
+            c.strokeStyle='rgba(251,191,36,'+(0.6*fade).toFixed(3)+')';
+            c.lineWidth=1.5; c.stroke();
+          }
+        }
+      }
+    }
+
+    // ---- pieces + their integer ids ----
+    var px = x0;
+    for(var i=0;i<row.pcs.length;i++){
+      var w = widths[i];
+
+      // the text piece
+      S(c,fs); c.textAlign='left';
+      c.globalAlpha = sIn;
+      c.fillStyle = 'rgba(238,243,255,1)';
+      c.fillText(row.pcs[i], px, baseY);
+      c.globalAlpha = 1;
+
+      // subtle underline showing the token boundary
+      if(sSep>0.2){
+        c.beginPath();
+        c.moveTo(px, baseY+8);
+        c.lineTo(px+w, baseY+8);
+        c.strokeStyle = row.dim;
+        c.lineWidth = 2;
+        c.stroke();
+      }
+
+      // the big integer it becomes
+      if(sNum>0){
+        var nw = Math.max(w*1.05, 96);
+        var nx = px + w/2 - nw/2;
+        var ny = baseY + 22;
+        var a  = Math.min(1, sNum*1.8);
+
+        c.globalAlpha = a;
+        bx(c, nx, ny, nw, 58, 9);
+        c.fillStyle = 'rgba(11,20,40,.96)'; c.fill();
+        c.strokeStyle = row.col; c.lineWidth = 2; c.stroke();
+
+        // the number itself — big and unmissable
+        var val = Math.round(row.ids[i]*sNum);
+        M(c, Math.min(38, nw/3.2), 700);
+        c.textAlign='center';
+        c.fillStyle = row.col;
+        c.fillText('#'+val, nx+nw/2, ny+39);
+        c.globalAlpha = 1;
+      }
+
+      px += w + (i<row.pcs.length-1 ? gap*sSep : 0);
     }
   }
-  note(c,'a rare word is split into pieces; each piece is an integer id',W,H);
+
+  // ---- footer: what the model actually receives ----
+  if(sNum>0.85){
+    var a2 = Math.min(1,(sNum-0.85)/0.15);
+    c.globalAlpha = a2;
+    S(c,13); c.textAlign='center';
+    c.fillStyle='rgba(143,162,196,.95)';
+    c.fillText('the model never sees the letters \u2014 only these integers', W*0.5, H-26);
+    c.globalAlpha = 1;
+  }
 });
 
 // ---------- 3 embeddings ----------

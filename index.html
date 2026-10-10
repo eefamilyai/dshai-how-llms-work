@@ -32,12 +32,13 @@
 </section>
 
 <section class="plate" id="p2">
-  <div class="art h2-art"><canvas id="p2-art"></canvas></div>
+  <div class="art h1-art"><canvas id="p2-art"></canvas></div>
   <div class="cap">
     <span class="n">02 · tokenization</span>
     <h2>A model has never seen a letter</h2>
     <p class="one">a rare word is split into pieces; each piece is an integer id</p>
-<p>Text is chopped into sub-word pieces, and each piece becomes an integer from a fixed vocabulary. Common words stay whole; rare ones get cut apart. The model's entire world is those integers.</p>
+<p>Every model has a fixed <b>vocabulary</b> — a list of roughly 100,000 to 200,000 entries, numbered from the beginning. Tokenizing is just choosing which entries to use. A word the vocabulary already contains becomes <b>one</b> token. A word it does not contain gets <b>cut apart</b> until every remaining piece is something it has seen before.</p>
+    <p>So <span class="mono">The cat sat</span> is three tokens, but <span class="mono">unbelievably</span> is also three — because nothing in the list matches the whole word. Both end up as integers. The model never sees a single letter.</p>
   </div>
   <div class="tail"></div>
 </section>
