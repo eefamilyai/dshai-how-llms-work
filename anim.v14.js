@@ -28,6 +28,7 @@ function A(id, draw){
     c.setTransform(D,0,0,D,0,0);
   }
   fit(); addEventListener('resize',fit);
+  if('ResizeObserver' in window){ new ResizeObserver(fit).observe(cv); }
   if('IntersectionObserver' in window){
     new IntersectionObserver(function(e){ on=e[0].isIntersecting; },{threshold:0.01}).observe(cv);
   } else on=true;
@@ -58,14 +59,50 @@ function gd(c,W,H,step,al){
   for(var x=0;x<W;x+=step){ c.beginPath(); c.moveTo(x,0); c.lineTo(x,H); c.stroke(); }
   for(var y=0;y<H;y+=step){ c.beginPath(); c.moveTo(0,y); c.lineTo(W,y); c.stroke(); }
 }
-function note(c,txt,W,H){
-  // shrink to fit: a caption can never run off the right edge
+function note(c,txt,W,H,align){
+  // a caption is shrunk to fit rather than allowed to run off the edge
   var maxW=W-48, size=11.5;
   M(c,size);
-  while(c.measureText(txt).width>maxW && size>7.5){ size-=0.5; M(c,size); }
-  c.textAlign='left'; c.fillStyle='rgba(150,168,202,1)';
-  c.fillText(txt, 24, H-20);
+  while(c.measureText(txt).width>maxW && size>8){ size-=0.5; M(c,size); }
+  c.textAlign=align||'left'; c.fillStyle='rgba(150,168,202,1)';
+  c.fillText(txt, align==='center'?W/2:24, H-20);
 }
+
+// ---------- no label may ever leave the canvas ----------
+// Every fillText is fitted to the room available on the side it is anchored to,
+// shrinking the font only as far as it must and restoring it immediately, so
+// layout maths elsewhere is unaffected. Without this a caption drawn at a fixed
+// x runs off the right edge as soon as the plate is narrower than the width the
+// string was tuned for.
+(function(){
+  if(typeof CanvasRenderingContext2D==='undefined') return;
+  var proto=CanvasRenderingContext2D.prototype, orig=proto.fillText;
+  function cssW(ctx){
+    var w=ctx.canvas?ctx.canvas.width:0;
+    try{ var m=ctx.getTransform(); if(m&&m.a) w=w/m.a; }catch(e){}
+    return w;
+  }
+  proto.fillText=function(text,x,y,maxW){
+    var s=(text==null?'':String(text));
+    if(!s) return orig.call(this,text,x,y,maxW);
+    var pad=10, W=cssW(this), limit;
+    if(maxW!=null && maxW>0) limit=maxW;
+    else if(this.textAlign==='right'||this.textAlign==='end') limit=x-pad;
+    else if(this.textAlign==='center') limit=2*Math.min(x-pad, W-x-pad);
+    else limit=W-x-pad;
+    if(!(limit>8)) return orig.call(this,text,x,y,maxW);
+    var w0=this.measureText(s).width;
+    if(w0<=limit) return orig.call(this,text,x,y,maxW);
+    var fm=/^\s*(\d*\.?\d+)(px\s+.*)$/.exec(this.font);
+    if(!fm) return orig.call(this,text,x,y,maxW);
+    var size=parseFloat(fm[1]);
+    if(!(size>0)||!(w0>0)) return orig.call(this,text,x,y,maxW);
+    var before=this.font;
+    this.font=(size*limit/w0).toFixed(2)+fm[2];
+    orig.call(this,text,x,y,maxW);
+    this.font=before;
+  };
+})();
 
 // ---------- HERO: the next-token loop ----------
 A('hero-art', function(c,W,H,t){
@@ -325,13 +362,13 @@ A('p3-art', function(c,W,H,t){
     else { c.textAlign='center'; c.fillText(w0, x, y+30); }
   }
 
-  // the analogy statement, anchored top-right where nothing else lives
-  M(c,12.5,700); c.textAlign='right';
+  // the analogy statement, anchored top-left where the cluster never reaches
+  M(c,12.5,700); c.textAlign='left';
   c.fillStyle='rgba(251,191,36,1)';
-  c.fillText('man \u2192 woman', W-26, 32);
-  c.fillText('king \u2192 queen', W-26, 52);
+  c.fillText('man \u2192 woman', 26, 32);
+  c.fillText('king \u2192 queen', 26, 52);
   M(c,11); c.fillStyle='rgba(150,165,195,1)';
-  c.fillText('same direction, same meaning shift', W-26, 72);
+  c.fillText('same direction, same meaning shift', 26, 72);
 
   note(c,'meaning lives in the direction of the vector \u2014 not in any single number',W,H);
 });
@@ -499,7 +536,7 @@ A('p8-art', function(c,W,H,t){
   ];
   var TOTAL=STAGES.reduce(function(s,x){return s+x.n;},0);
 
-  var padL=Math.min(210,W*0.24), padR=180, padT=54, padB=52;
+  var padL=Math.min(190,W*0.20), padR=40, padT=54, padB=52;
   var gw=W-padL-padR, gh=H-padT-padB;
 
   // the residual rail
@@ -539,10 +576,10 @@ A('p8-art', function(c,W,H,t){
     c.fillStyle= on?'rgba(6,9,17,.85)':'rgba(120,135,168,.9)';
     c.fillText(st.label, padL+14, y+h/2+16);
 
-    // right-hand annotation
-    M(c,10.5); c.textAlign='left';
-    c.fillStyle= on?'rgba(188,208,255,.95)':'rgba(90,104,136,.85)';
-    c.fillText(st.sub, padL+gw+14, y+h/2+4);
+    // annotation sits inside its own band, right-aligned
+    M(c,10.5); c.textAlign='right';
+    c.fillStyle= on?'rgba(6,9,17,.80)':'rgba(90,104,136,.85)';
+    c.fillText(st.sub, padL+gw-14, y+h/2+4);
 
     // node on the rail
     c.beginPath(); c.arc(railX, y+h/2, isNow?7:5, 0, Math.PI*2);
