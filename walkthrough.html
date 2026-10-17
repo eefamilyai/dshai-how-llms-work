@@ -62,6 +62,7 @@ h3{margin:34px 0 12px;font-size:13px;letter-spacing:.18em;text-transform:upperca
 .chaps{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
 .chap{text-align:left;background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:10px 12px;cursor:pointer;
   font:600 14px var(--sans);display:flex;gap:10px;align-items:baseline;min-width:0}
+.part{grid-column:1/-1;font:700 12px var(--mono);letter-spacing:.14em;color:var(--dim);margin-top:10px}
 .chap b{font:700 12px var(--mono);color:var(--dim)}
 .chap:hover{border-color:var(--cyan)}
 .chap.on{border-color:var(--cyan);background:#0c1a2a}
@@ -88,7 +89,7 @@ summary{cursor:pointer;font-weight:700;padding:8px 0}
       <div class="overlay" id="ov">
         <div class="box">
           <h2 id="ovTitle">From your prompt to its answer, step by step</h2>
-          <p id="ovSub">16 short chapters, about 13 minutes. Turn your sound on: the narration uses your browser's built-in voice.</p>
+          <p id="ovSub">19 short chapters, about 17 minutes. It starts with the big picture, then zooms into each part. Turn your sound on: the narration uses your browser's built-in voice.</p>
           <button class="bigplay" id="bigplay" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg><span id="bigLabel">Start the walkthrough</span></button>
         </div>
       </div>
@@ -172,6 +173,69 @@ function llm(x,y,w,h,t,lbl){glow(x+w/2,y+h/2,w*.85,C.blue,.22);box(x,y,w,h,{fill
 function bracket(x1,x2,y,col,label,o){o=o||{};line(x1,y,x1,y+10,col,2);line(x1,y+10,x2,y+10,col,2);line(x2,y,x2,y+10,col,2);
   if(label)T(label,(x1+x2)/2,y+38,{size:o.size||20,align:'center',color:col,weight:600})}
 
+// ------------------------------------------------------------------ the big-picture map
+// One architecture diagram, reused full-screen (part 1), as the camera target for each zoom, and as the corner minimap.
+var MAP={text:[30,250,130,220],tok:[190,290,115,140],emb:[335,260,135,200],block:[505,190,370,340],attn:[528,240,152,225],ffn:[700,240,152,225],
+  unemb:[905,260,120,200],soft:[1048,260,100,200],samp:[1170,290,92,140],loop:[60,430,1200,230],mats:[335,240,690,230]};
+var RT=vals('grid-table',2048),MATS_HL=false;
+function gridIcon(x,y,cols,rows,cs,col,seed){var o=(seed||0)*97;
+  if(MATS_HL){c.save();c.globalAlpha=1;glow(x+cols*cs/2,y+rows*cs/2,Math.max(cols,rows)*cs,C.amber,.35);col=C.amber}
+  for(var r=0;r<rows;r++)for(var q=0;q<cols;q++){var v=RT[(o+r*31+q*17)%2048];c.fillStyle=rgba(col,.15+.55*Math.abs(v));c.fillRect(x+q*cs,y+r*cs,cs-1.5,cs-1.5)}
+  c.strokeStyle=rgba(col,.85);c.lineWidth=1.2;c.strokeRect(x-1.5,y-1.5,cols*cs+1.5,rows*cs+1.5);
+  if(MATS_HL)c.restore()}
+function drawMap(o){
+  o=o||{};var H=o.hl||null,Tm=o.T||0,mini=!!o.mini;MATS_HL=!!(H&&H.indexOf('mats')>=0);
+  function on(k){if(!H)return true;if(MATS_HL)return false;if(H.indexOf(k)>=0)return true;return (k==='attn'||k==='ffn')&&H.indexOf('block')>=0}
+  function al(k){return on(k)?1:(MATS_HL?.5:.22)}
+  function hg(k){return !!H&&on(k)}
+  var pulse=.6+.4*Math.sin(Tm*4);
+  function comp(k,title,sub,col,icon){var r=MAP[k];A(al(k),function(){
+    if(hg(k))glow(r[0]+r[2]/2,r[1]+r[3]/2,Math.max(r[2],r[3])*.85,col,.25*pulse);
+    box(r[0],r[1],r[2],r[3],{fill:hg(k)?rgba(col,.13):C.panel,stroke:hg(k)?col:rgba(col,.5),r:12,lw:hg(k)?2.5:1.5});
+    T(title,r[0]+r[2]/2,r[1]+28,{size:k==='unemb'||k==='soft'?16:18,align:'center',color:C.ink,weight:700});
+    if(sub&&!mini)T(sub,r[0]+r[2]/2,r[1]+r[3]-14,{size:13,align:'center',color:C.muted});
+    if(icon)icon(r)})}
+  if(!mini){
+    [['1 · TEXT → NUMBERS',190,470,C.cyan,['tok','emb']],['2 · THINKING',505,875,C.violet,['block']],['3 · NUMBERS → NEXT TOKEN',905,1262,C.amber,['unemb','soft','samp']]].forEach(function(h){
+      A(h[4].some(on)||MATS_HL?1:.3,function(){T(h[0],(h[1]+h[2])/2,140,{size:15,mono:true,align:'center',color:h[3],weight:700});line(h[1],152,h[2],152,rgba(h[3],.5),1.5)})});
+    T('= a matrix: a grid of numbers the model learned',96,694,{size:15,color:MATS_HL?C.amber:C.dim});gridIcon(60,680,3,2,9,C.cyan,9);
+  }
+  [[160,190,'tok'],[305,335,'emb'],[470,505,'block'],[875,905,'unemb'],[1025,1048,'soft'],[1148,1170,'samp']].forEach(function(a){A(al(a[2]),function(){arrow(a[0]+2,360,a[1]-3,360,{color:C.muted,lw:2,head:9})})});
+  A(al('loop'),function(){var h=hg('loop');c.save();c.strokeStyle=h?C.amber:rgba(C.amber,.55);c.lineWidth=h?3:2;c.setLineDash([8,6]);c.lineDashOffset=-Tm*30;
+    c.beginPath();c.moveTo(1216,432);c.lineTo(1216,600);c.quadraticCurveTo(1216,625,1190,625);c.lineTo(120,625);c.quadraticCurveTo(95,625,95,600);c.lineTo(95,478);c.stroke();c.restore();
+    head(95,472,-Math.PI/2,C.amber,11);if(!mini)T('append the picked token to the text, then run again',655,652,{size:17,align:'center',color:C.amber})});
+  A(al('text'),function(){var r=MAP.text;box(r[0],r[1],r[2],r[3],{fill:C.panel,stroke:hg('text')?C.ink:C.line,r:12,lw:2});
+    if(hg('text'))glow(r[0]+r[2]/2,r[1]+r[3]/2,150,C.ink,.12*pulse);
+    if(!mini)T('your text',r[0]+r[2]/2,r[1]-12,{size:16,align:'center',color:C.muted});
+    var ws=o.words||['The','cat','sat','on','the'],st=Math.min(34,180/ws.length);ws.forEach(function(w,i){T(w,r[0]+r[2]/2,r[1]+36+i*st,{size:20,mono:true,align:'center',color:i>=5?C.amber:C.ink})})});
+  comp('tok','Tokenizer','text → ID numbers',C.cyan,function(r){[[14,'un'],[32,'believ'],[22,'ably']].reduce(function(x,p){chip(x,r[1]+52,p[0]+8,24,p[1],{size:10,color:C.cyan,pad:0});return x+p[0]+12},r[0]+10);
+    T('791 6667 1346',r[0]+r[2]/2,r[1]+100,{size:13,mono:true,align:'center',color:C.amber})});
+  comp('emb','Embedding','+ position',C.cyan,function(r){gridIcon(r[0]+r[2]/2-30,r[1]+46,6,9,10,C.cyan,1);if(!mini)T('one row per token',r[0]+r[2]/2,r[1]+158,{size:13,align:'center',color:C.dim})});
+  var b=MAP.block,ns=2+Math.round((o.stack||0)*3);
+  A(al('block'),function(){for(var s2=ns;s2>=1;s2--)box(b[0]+s2*8,b[1]-s2*8,b[2],b[3],{fill:'#0a1020',stroke:rgba(C.blue,.35+(o.stack||0)*.3),r:14});
+    if(hg('block'))glow(b[0]+b[2]/2,b[1]+b[3]/2,300,C.blue,.2*pulse);
+    box(b[0],b[1],b[2],b[3],{fill:'#0b1226',stroke:hg('block')?C.blue:rgba(C.blue,.6),r:14,lw:hg('block')?2.5:2});
+    T('Transformer block',b[0]+16,b[1]+30,{size:18,color:C.ink,weight:800});T('× N',b[0]+b[2]-16,b[1]+30,{size:18,align:'right',color:C.amber,weight:800,mono:true});
+    var sy=500;c.strokeStyle=C.cyan;c.lineWidth=3;c.beginPath();c.moveTo(b[0],sy);c.lineTo(b[0]+b[2],sy);c.stroke();
+    [[545,665,690],[715,835,862]].forEach(function(q){line(q[0],sy,q[0],468,rgba(C.cyan,.7),1.5);line(q[1],468,q[2],sy-8,rgba(C.green,.9),1.5);
+      c.fillStyle='#0b1226';c.beginPath();c.arc(q[2],sy,8,0,7);c.fill();c.strokeStyle=C.green;c.lineWidth=2;c.stroke();T('+',q[2],sy+5,{size:14,align:'center',color:C.green,weight:800})});
+    if(!mini)T('residual stream (each part adds its result)',b[0]+b[2]/2,sy+22,{size:13,align:'center',color:C.cyan});
+  });
+  comp('attn','Attention','tokens share info',C.violet,function(r){['Q','K','V'].forEach(function(q,i){var x=r[0]+22+i*42;gridIcon(x,r[1]+46,3,4,9,C.violet,2+i);T('W'+q,x+13,r[1]+98,{size:13,mono:true,align:'center',color:C.violet})});
+    for(var i=0;i<4;i++){c.fillStyle=C.violet;c.beginPath();c.arc(r[0]+40+i*24,r[1]+170,4,0,7);c.fill()}
+    for(var j=1;j<4;j++){c.strokeStyle=rgba(C.violet,.7);c.lineWidth=1.5;c.beginPath();c.moveTo(r[0]+40+j*24,r[1]+164);c.quadraticCurveTo(r[0]+40+j*12,r[1]+134-j*4,r[0]+40,r[1]+164);c.stroke()}});
+  comp('ffn','Feed-forward','each token alone',C.green,function(r){gridIcon(r[0]+40,r[1]+46,8,3,9,C.green,6);T('W up',r[0]+76,r[1]+90,{size:13,mono:true,align:'center',color:C.green});
+    for(var i=0;i<8;i++){c.fillStyle=rgba(C.green,.4+.6*Math.max(0,Math.sin(Tm*3+i*1.3)));c.beginPath();c.arc(r[0]+40+i*10+4,r[1]+108,3.5,0,7);c.fill()}
+    gridIcon(r[0]+40,r[1]+124,8,3,9,C.green,7);T('W down',r[0]+76,r[1]+168,{size:13,mono:true,align:'center',color:C.green})});
+  comp('unemb','Output','score per token',C.amber,function(r){T('matrix',r[0]+r[2]/2,r[1]+48,{size:16,align:'center',color:C.ink,weight:700});gridIcon(r[0]+r[2]/2-40,r[1]+64,9,8,9,C.amber,8)});
+  comp('soft','Softmax','probabilities',C.amber,function(r){[70,26,16,10,6].forEach(function(h,i){box(r[0]+18+i*14,r[1]+150-h,10,h,{fill:i?rgba(C.amber,.5):C.amber,r:2})})});
+  comp('samp','Pick','one token',C.amber,function(r){var cx=r[0]+r[2]/2,cy=r[1]+78,a=-Math.PI/2;[.46,.23,.15,.16].forEach(function(p,i){c.fillStyle=rgba(PAL[i],.8);c.beginPath();c.moveTo(cx,cy);c.arc(cx,cy,24,a,a+p*Math.PI*2);c.closePath();c.fill();a+=p*Math.PI*2})});
+  MATS_HL=false;
+}
+function vstrip(x,y,seed,a){var v=vals(seed,10);A(a==null?1:a,function(){rr(x-3,y-3,14,84,4);c.fillStyle='#060a12';c.fill();for(var i=0;i<10;i++){c.fillStyle='#111a2c';c.fillRect(x,y+i*8,8,7);c.fillStyle=cellCol(v[i]);c.fillRect(x,y+i*8,8,7)}})}
+function along(P,u){var L=[],tot=0;for(var i=1;i<P.length;i++){var d=Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]);L.push(d);tot+=d}
+  var t=clamp(u)*tot;for(var j=0;j<L.length;j++){if(t<=L[j]){var f=L[j]?t/L[j]:0;return [lerp(P[j][0],P[j+1][0],f),lerp(P[j][1],P[j+1][1],f)]}t-=L[j]}return P[P.length-1]}
+
 // ------------------------------------------------------------------ scenes
 // Each scene: chapter title, narration beats (one caption each), and a draw(s) function on a 1280×720 stage.
 // s.b = current beat; s.k(i,d) eases 0→1 over d seconds once beat i starts (1 for earlier beats, 0 for later);
@@ -186,7 +250,7 @@ scene('The big idea',[
  "It's like the autocomplete on your phone, but trained on a huge slice of the internet, and enormously bigger.",
  "Give it 'The capital of France is', and it predicts that the next word is very likely 'Paris'.",
  "Then it glues that word onto the end, and does the whole thing again. And again. One small piece at a time, it writes the entire answer.",
- "That loop is the whole show. Everything else in this walkthrough explains how it makes each guess so well."
+ "That loop is the whole show. Next, let's see the whole machine on one screen, before zooming into each part to see how it makes each guess so well."
 ],function(s){
   var a0=1-s.k(1,.7);
   A(a0,function(){
@@ -239,10 +303,139 @@ scene('The big idea',[
   });
 });
 
+// 2 ─ the whole machine
+scene('The whole machine',[
+ "Before we zoom into any details, here is the whole machine on one screen. ChatGPT, Claude, Gemini and Llama all have roughly this shape.",
+ "On the left, your text comes in. Here, it's 'The cat sat on the'.",
+ "Stage one turns text into numbers. The tokenizer chops the text into pieces called tokens, and the embedding step turns each token into a list of numbers, called a vector.",
+ "Stage two is where the thinking happens: the transformer block. Inside it, attention lets the tokens share information with each other, and a feed-forward network processes each token using stored knowledge.",
+ "This block isn't used just once. Dozens of copies are stacked one after another, often thirty to a hundred and twenty, each with its own learned numbers.",
+ "Stage three turns numbers back into a word. The output matrix gives every possible token a score, softmax turns the scores into probabilities, and one token is picked.",
+ "The picked token is glued onto the end of the text, and the whole loop runs again. One loop, one new token. That's how an answer gets written.",
+ "And notice the little grids inside the boxes. Those are matrices: big tables of numbers that the model learned during training. They are where all of its knowledge lives."
+],function(s){
+  var HL=[null,['text'],['tok','emb'],['block'],['block'],['unemb','soft','samp'],['loop'],['mats']][s.b];
+  drawMap({hl:HL,T:s.T,stack:s.b===4?EO(s.k(4,1.4)):0});
+  A(s.b===4?s.k(4,.8):0,function(){T('stacked 30 to 120 times',690,578,{size:20,align:'center',color:C.amber,weight:700})});
+  A(s.b===0?s.k(0,.8):0,function(){T('every LLM, start to finish',640,100,{size:20,align:'center',color:C.muted})});
+});
+
+// 3 ─ a token's journey
+var JW=['The','cat','sat','on','the'];
+scene('A token’s journey',[
+ "Now let's follow one sentence through the machine. We type 'The cat sat on the', and the model has to continue it.",
+ "First, the tokenizer chops the text into tokens, and swaps each one for its ID number from the vocabulary.",
+ "Each ID then fetches its own row from the embedding matrix. Out come five vectors, one per token. From here on, every token is just a column of numbers.",
+ "The vectors enter the transformer block side by side. In attention, they exchange information. 'Sat' looks back at 'cat', 'the' looks back at 'on', and so on.",
+ "Then, in the feed-forward network, each vector is transformed on its own, using knowledge stored in the block's matrices.",
+ "That block repeats dozens of times. With every pass, the vectors get refined a little more. Watch the colours change as they go.",
+ "At the end, only one vector matters for the prediction: the one belonging to the last token, 'the'. It now carries a summary of the whole sentence.",
+ "The output matrix turns that vector into a score for every token in the vocabulary, and softmax turns the scores into probabilities.",
+ "One token is picked, here 'mat', and it travels back around the loop to the end of the text. Then the journey starts again for the next token.",
+ "Keep this picture in mind. Next, we'll look at the ingredient every one of these boxes is built from: matrices. Then we'll zoom into each box in turn."
+],function(s){
+  var t1=s.since(1),t2=s.since(2),t3=s.since(3),t4=s.since(4),t5=s.since(5),t6=s.since(6),t7=s.since(7),t8=s.since(8);
+  var HL=[null,['tok'],['emb'],['attn'],['ffn'],['block'],['block'],['unemb','soft'],['samp','loop'],['mats']][s.b];
+  var matIn=s.b>8||(s.b===8&&t8>3.2);
+  drawMap({hl:HL,T:s.T,words:matIn?JW.concat(['mat']):JW});
+  var wy=function(i){return 279+i*34};
+  // words fly into the tokenizer, IDs come out
+  if(s.b===1){JW.forEach(function(w,i){var q=EIO(clamp((t1-i*.12)/1)),x=lerp(95,247,q),y=lerp(wy(i),360,q),ww=tw(w,18,600,true)+16;
+    A(1-clamp((q-.8)/.2),function(){chip(x-ww/2,y-14,ww,28,w,{size:18,color:C.cyan,fill:.3})})})}
+  var showIds=(s.b===1&&t1>1.1)||(s.b===2&&t2<1.3);
+  if(showIds){box(198,296,99,128,{fill:'#0a1020',r:8});[464,3797,3332,319,262].forEach(function(id,i){
+    var a=s.b===1?clamp((t1-1.1-i*.1)/.4):1,q=s.b===2?EIO(clamp((t2-i*.08)/1)):0,x=lerp(247,402,q),y=lerp(302+i*26,360,q);
+    A(a*(1-clamp((q-.75)/.25)),function(){chip(x-34,y-11,68,22,String(id),{size:14,color:C.amber,fill:.25})})})}
+  // vector strips
+  var E=function(i){return [352+i*22,318]},Aa=function(i){return [562+i*22,330]},F=function(i){return [734+i*22,330]},U=[961,330];
+  var layer=s.b>=5?Math.min(32,1+Math.floor(t5*5)):1,seed=function(i){return 'jv'+i+'L'+layer};
+  if(s.b===2&&t2>1.1){box(341,300,123,104,{fill:'#0a1020',r:8});for(var i=0;i<5;i++){var p=E(i);vstrip(p[0],p[1],seed(i),clamp((t2-1.1-i*.1)/.4))}}
+  if(s.b===3||s.b===4||s.b===5||s.b===6){
+    var inA=s.b===3||(s.b===5&&((t5*2.5)%2)<1&&layer<32);
+    box(534,282,140,160,{fill:'#0a1020',r:8});box(706,282,140,160,{fill:'#0a1020',r:8});
+    for(var j=0;j<5;j++){var from,to,q;
+      if(s.b===3){from=E(j);to=Aa(j);q=EIO(clamp((t3-j*.06)/1.1))}
+      else if(s.b===4){from=Aa(j);to=F(j);q=EIO(clamp((t4-j*.05)/1))}
+      else if(s.b===5){var ph=(t5*2.5)%2;if(layer>=32){from=F(j);to=F(j);q=1}else if(ph<1){from=F(j);to=Aa(j);q=EIO(ph)}else{from=Aa(j);to=F(j);q=EIO(ph-1)}}
+      else{from=F(j);to=j===4?U:F(j);q=j===4?EIO(clamp((t6-.8)/1.2)):1}
+      var a=(s.b===6&&j<4)?1-s.k(6,1):1,x=lerp(from[0],to[0],q),y=lerp(from[1],to[1],q);
+      if(s.b===4)glow(x+4,y+40,30,C.green,.25*(.5+.5*Math.sin(s.T*6+j)));
+      vstrip(x,y,seed(j),a);
+    }
+    if(s.b===3&&t3>1.3)A(clamp((t3-1.3)/.6),function(){for(var i=1;i<5;i++)for(var j2=0;j2<i;j2++){var x1=Aa(i)[0]+4,x2=Aa(j2)[0]+4,wgt=j2===i-1?1:.35;
+      c.strokeStyle=rgba(C.violet,.25+.6*wgt);c.lineWidth=1+2*wgt;c.beginPath();c.moveTo(x1,326);c.quadraticCurveTo((x1+x2)/2,326-12-(i-j2)*9,x2,326);c.stroke()}});
+    if(s.b===5)T('pass through block '+layer+' of 32',690,578,{size:20,mono:true,align:'center',color:C.amber,weight:700});
+    if(s.b===6)A(s.k(6,.8),function(){T('only the last token’s vector is needed',690,578,{size:19,align:'center',color:C.amber})});
+  }
+  if(s.b===7){vstrip(U[0],U[1],seed(4),1-clamp(t7/1.2))}
+  var popA=s.b===7?s.k(7,.8):s.b===8?1-clamp(t8/1.2):0;
+  A(popA,function(){box(915,470,235,124,{fill:'#0a1020',stroke:C.amber,r:10});[['mat',.46],['floor',.23],['sofa',.15]].forEach(function(r,i){var y=496+i*32;
+    T(r[0],975,y+5,{size:17,mono:true,align:'right',color:i?C.ink:C.amber});box(985,y-9,r[1]*260*EO(s.k(7,1.5)),16,{fill:i?rgba(C.amber,.5):C.amber,r:3});T(Math.round(r[1]*100)+'%',1140,y+5,{size:14,mono:true,align:'right',color:C.muted})})});
+  if(s.b===8&&!matIn){var P=[[1216,462],[1216,625],[95,625],[95,429]],pt=along(P,EIO(clamp((t8-1)/2.2)));
+    A(clamp(t8/.5),function(){chip(pt[0]-32,pt[1]-16,64,32,'mat',{size:18,color:C.amber,glow:.8,fill:.35})})}
+});
+
+// 4 ─ matrices
+var MV=[1,2,0,3],MW=[[2,0,1],[1,1,0],[0,3,2],[1,-1,1]],MW2=[[1,2,0],[0,1,1],[2,0,1],[-1,1,2]];
+function mvmul(v,W){var o=[];for(var j=0;j<W[0].length;j++){var a=0;for(var i=0;i<v.length;i++)a+=v[i]*W[i][j];o.push(a)}return o}
+scene('Matrices',[
+ "So what is a matrix? It's simply a grid of numbers, arranged in rows and columns. Nothing more mysterious than a spreadsheet.",
+ "Its partner is the vector: a single list of numbers, like the ones that represent each token.",
+ "Multiplying a vector by a matrix makes a new vector. To get the first output number, pair the vector with the first column, multiply each pair, and add up the results.",
+ "Do the same for every column, and you get a whole new vector. So a matrix is a machine that transforms one vector into another.",
+ "Change the numbers in the matrix, and the same input becomes a different output. Training is the search for the numbers that produce useful transformations.",
+ "The model doesn't do this one token at a time. Stack all the token vectors as the rows of one matrix, and a single big multiplication transforms every token at once.",
+ "A large model holds hundreds of these matrices, with billions of numbers in total. Those numbers are its parameters. Running the model is mostly multiplying matrices, which is exactly what graphics chips, GPUs, are built to do fast."
+],function(s){
+  var small=1-s.k(5,.7);
+  A(small,function(){
+    var cw=72,chh=54,vx=330,mx=470,my=200,blend=s.b>=4?EIO(s.k(4,1.6)):0;
+    var Wc=MW.map(function(r,i){return r.map(function(v,j){return lerp(v,MW2[i][j],blend)})}),out=mvmul(MV,Wc);
+    A(s.k(0,.6),function(){T('MATRIX',mx+cw*1.5,my-46,{size:15,mono:true,align:'center',color:C.cyan,weight:700});T('4 rows × 3 columns',mx+cw*1.5,my-22,{size:16,align:'center',color:C.dim});
+      for(var i=0;i<4;i++)for(var j=0;j<3;j++){var hot=(s.b===2&&j===0)||(s.b===3&&j===Math.min(2,1+Math.floor(s.since(3)/1.8)));
+        box(mx+j*cw,my+i*chh,cw-6,chh-6,{fill:hot?rgba(C.cyan,.22):'#0f1729',stroke:hot?C.cyan:C.line,r:6});
+        T(String(Math.round(Wc[i][j])),mx+j*cw+(cw-6)/2,my+i*chh+34,{size:24,mono:true,align:'center',color:blend>0&&blend<1?C.muted:C.ink,weight:700})}});
+    A(s.k(1,.6),function(){T('VECTOR',vx+(cw-6)/2,my-46,{size:15,mono:true,align:'center',color:C.amber,weight:700});T('4 numbers',vx+(cw-6)/2,my-22,{size:16,align:'center',color:C.dim});
+      MV.forEach(function(v,i){box(vx,my+i*chh,cw-6,chh-6,{fill:rgba(C.amber,.15),stroke:C.amber,r:6});T(String(v),vx+(cw-6)/2,my+i*chh+34,{size:24,mono:true,align:'center',color:C.amber,weight:700})});
+      T('×',vx+cw+14,my+2*chh+6,{size:34,align:'center',color:C.muted})});
+    var nOut=s.b<2?0:s.b===2?(s.since(2)>3?1:0):s.b===3?Math.min(3,1+Math.floor((s.since(3)+.6)/1.8)):3;
+    var oy=my+4*chh+30;
+    if(nOut>0){T('NEW VECTOR',mx-30,oy+34,{size:15,mono:true,align:'right',color:C.green,weight:700});
+      for(var j=0;j<nOut;j++){box(mx+j*cw,oy,cw-6,chh-6,{fill:rgba(C.green,.15),stroke:C.green,r:6});T(String(Math.round(out[j])),mx+j*cw+(cw-6)/2,oy+34,{size:24,mono:true,align:'center',color:C.green,weight:700})}}
+    if(s.b===2||s.b===3){var col=s.b===2?0:Math.min(2,1+Math.floor(s.since(3)/1.8));
+      for(var i=0;i<4;i++){c.save();c.globalAlpha*=.5;line(vx+cw-6,my+i*chh+24,mx+col*cw,my+i*chh+24,C.cyan,1.5,[4,4]);c.restore()}}
+    var calcs=[];for(var j=0;j<3;j++)calcs.push(MV.map(function(v,i){return v+'×'+String(Math.round(Wc[i][j])).replace('-','−')}).join(' + ')+' = '+Math.round(out[j]));
+    var nc=s.b===2?clamp(s.since(2)/1.5)>0?1:0:s.b===3?nOut:s.b>=4?3:0;
+    for(var j2=0;j2<nc;j2++)T('column '+(j2+1)+':  '+calcs[j2],760,my+40+j2*48,{size:21,mono:true,color:j2===nc-1&&s.b<4?C.cyan:C.muted});
+    A(s.b===4?clamp((s.since(4)-1.6)/.6):0,function(){T('same vector, new matrix numbers → new result',760,my+200,{size:20,color:C.amber})});
+    A(s.b===3?clamp((s.since(3)-5)/.6):0,function(){T('a matrix transforms one vector into another',760,my+200,{size:20,color:C.green})});
+  });
+  A(s.k(5,.8)*(1-s.k(6,.6)),function(){
+    var tk=['The','cat','sat','on','the'],cs=34,x1=150,y1=230;
+    T('all 5 tokens at once',640,150,{size:22,align:'center',color:C.muted});
+    tk.forEach(function(t,i){T(t,x1-14,y1+i*(cs+4)+24,{size:18,mono:true,align:'right',color:C.ink});cells(x1,y1+i*(cs+4),vals('mx'+t+i,6),{cw:cs-4,ch:cs,gap:4})});
+    T('5 tokens × 6 numbers',x1+102,y1+5*(cs+4)+30,{size:16,align:'center',color:C.dim});
+    T('×',x1+250,y1+100,{size:40,align:'center',color:C.muted});
+    gridIcon(x1+300,y1+20,4,6,26,C.cyan,3);T('weights',x1+352,y1+5*(cs+4)+30,{size:16,align:'center',color:C.dim});
+    T('=',x1+470,y1+100,{size:40,align:'center',color:C.muted});
+    var p=EO(clamp((s.since(5)-1.5)/1.2));tk.forEach(function(t,i){cells(x1+520,y1+i*(cs+4),vals('my'+t+i,4).map(function(v){return v*p}),{cw:cs-4,ch:cs,gap:4})});
+    T('5 tokens × 4 new numbers',x1+590,y1+5*(cs+4)+30,{size:16,align:'center',color:C.dim});
+    T('real sizes: thousands of tokens × 4,096 numbers, in one multiplication',640,600,{size:20,align:'center',color:C.cyan});
+  });
+  A(s.k(6,.8),function(){
+    var n=Math.round(70e9*EO(clamp(s.since(6)/3)));
+    T('a 70-billion-parameter model',640,220,{size:26,align:'center',color:C.muted});
+    T(n.toLocaleString('en-US'),640,310,{size:64,mono:true,align:'center',color:C.amber,weight:800});
+    T('numbers, spread across hundreds of matrices  ·  about 140 GB at 2 bytes each',640,370,{size:20,align:'center',color:C.muted});
+    for(var i=0;i<14;i++)gridIcon(150+i*70,440,5,5,9,PAL[i%6],i);
+    T('running the model = multiplying matrices · GPUs do this extremely fast',640,560,{size:22,align:'center',color:C.cyan});
+  });
+});
+
 // 2 ─ tokens
 var TOK=[['The',464],['·cat',3797],['·sat',3332],['·on',319],['·the',262],['·mat',2603],['.',13],['·Un',791],['believ',6667],['ably',1346],['!',0]];
 scene('Tokens',[
- "Step one: tokens. A model can't read letters the way you do, so your text is first chopped into small pieces called tokens.",
+ "Let's zoom in, starting with the tokenizer. A model can't read letters the way you do, so your text is first chopped into small pieces called tokens.",
  "A token is often a whole word. Common words like 'cat', 'sat' and 'the' each get a single token.",
  "Rarer or longer words are split into parts. 'Unbelievably' becomes three tokens: 'Un', 'believ' and 'ably'.",
  "Spaces and punctuation count too. The little dots here mark a space glued to the front of a token. On average, a token is about three quarters of an English word.",
@@ -291,8 +484,9 @@ var PTS=[['cat',.18,.32,0],['dog',.25,.26,0],['horse',.13,.22,0],['mouse',.23,.4
  ['pizza',.30,.74,2],['bread',.38,.67,2],['apple',.23,.64,2],
  ['man',.55,.50,3],['woman',.73,.54,3],['king',.57,.76,3],['queen',.75,.80,3]];
 scene('Embeddings',[
- "Step two: embeddings. An ID by itself tells the model nothing about meaning. Token three thousand seven hundred is not 'bigger' than token four hundred.",
+ "Next, the embedding step. An ID by itself tells the model nothing about meaning. Token three thousand seven hundred is not 'bigger' than token four hundred.",
  "So each ID is swapped for a long list of numbers called a vector. Think of it as the token's coordinates on a giant map of meaning.",
+ "Where do those numbers come from? From the embedding matrix: a giant table with one row for every token in the vocabulary. Token 3797 simply grabs row 3797, and that row is its vector.",
  "Real models use thousands of numbers per token. Here we squash that down to just two, so the map fits on screen.",
  "Words with similar meanings end up close together. 'Cat' sits near 'dog'. 'Paris' sits near 'London' and 'Tokyo'.",
  "Even directions mean something. The step from 'man' to 'woman' points roughly the same way as the step from 'king' to 'queen'.",
@@ -309,7 +503,16 @@ scene('Embeddings',[
       T('each number nudges one direction of meaning: warm cell = positive, blue = negative',640,480,{size:17,align:'center',color:C.dim});
     });
   });
-  var am=s.k(2,.9);
+  A(s.k(2,.7)*(1-s.k(3,.6)),function(){
+    chip(80,290,150,56,'·cat',{size:28,color:C.cyan});T('ID 3797',155,385,{size:24,mono:true,align:'center',color:C.amber});
+    var rows=['0','1','2','⋮','3796','3797','3798','⋮','100,255'],tx=560,ty=150,rh=44,nc=16,cw=20;
+    T('EMBEDDING MATRIX',tx,ty-34,{size:16,mono:true,color:C.cyan,weight:700});T('~100,000 rows (one per token) × ~4,096 columns',tx+180,ty-34,{size:16,color:C.dim});
+    rows.forEach(function(r,i){var y=ty+i*rh,hi=r==='3797';T(r,tx-14,y+24,{size:18,mono:true,align:'right',color:hi?C.amber:C.dim});
+      if(r==='⋮')return;cells(tx,y+4,vals('emb'+r,nc),{cw:cw-3,ch:28,gap:3});if(hi)box(tx-6,y,nc*cw+10,36,{stroke:C.amber,lw:2.5,r:6})});
+    curve(215,380,380,ty+5*rh+18,tx-70,ty+5*rh+18,{color:C.amber,lw:2.5});
+    var p=EO(clamp((s.since(2)-3)/1.2));A(p,function(){var y=lerp(ty+5*rh+4,600,p);cells(tx,y,vals('emb3797',nc),{cw:cw-3,ch:28,gap:3});T('= the vector for “cat”',tx+nc*cw+20,y+22,{size:20,color:C.amber})});
+  });
+  var am=s.k(3,.9);
   A(am,function(){
     var X0=90,Y0=110,W=1100,H=560;
     box(X0,Y0,W,H,{fill:'#080d18',stroke:C.line,r:14});
@@ -317,25 +520,25 @@ scene('Embeddings',[
     for(var gy=1;gy<6;gy++)line(X0+8,Y0+gy*H/6,X0+W-8,Y0+gy*H/6,'rgba(28,41,68,.5)',1);
     T('meaning map · 2 of ~4,000 dimensions',X0+W-16,Y0+30,{size:16,mono:true,color:C.dim,align:'right'});
     var gc=[C.cyan,C.violet,C.green,C.amber],gn=['animals','cities','food','people'];
-    if(s.b>=3)A(s.k(3,.8),function(){[[0,.19,.30],[1,.73,.26],[2,.31,.69]].forEach(function(g){var x=X0+g[1]*W,y=Y0+g[2]*H;
+    if(s.b>=4)A(s.k(4,.8),function(){[[0,.19,.30],[1,.73,.26],[2,.31,.69]].forEach(function(g){var x=X0+g[1]*W,y=Y0+g[2]*H;
       c.strokeStyle=rgba(gc[g[0]],.6);c.lineWidth=1.5;c.setLineDash([6,6]);c.beginPath();c.ellipse(x,y,130,82,0,0,7);c.stroke();c.setLineDash([]);
       T(gn[g[0]],x,g[0]===1?y+108:y-92,{size:18,align:'center',color:gc[g[0]]})})});
     PTS.forEach(function(p,i){var a=EO(am*2-i*.06),x=X0+p[1]*W+Math.sin(s.T*.7+i)*2,y=Y0+p[2]*H+Math.cos(s.T*.6+i)*2;
       A(a,function(){glow(x,y,22,gc[p[3]],.35);c.fillStyle=gc[p[3]];c.beginPath();c.arc(x,y,6,0,7);c.fill();T(p[0],x+12,y+6,{size:20,mono:true,color:C.ink})})});
-    if(s.b>=4)A(s.k(4,1),function(){
+    if(s.b>=5)A(s.k(5,1),function(){
       function pt(n){for(var i=0;i<PTS.length;i++)if(PTS[i][0]===n)return [X0+PTS[i][1]*W,Y0+PTS[i][2]*H]}
-      var m=pt('man'),w=pt('woman'),k=pt('king'),q=pt('queen'),p=EO(s.k(4,1.4));
+      var m=pt('man'),w=pt('woman'),k=pt('king'),q=pt('queen'),p=EO(s.k(5,1.4));
       arrow(m[0],m[1],lerp(m[0],w[0]-8,p),lerp(m[1],w[1],p),{color:C.amber,lw:3});
       arrow(k[0],k[1],lerp(k[0],q[0]-8,p),lerp(k[1],q[1],p),{color:C.amber,lw:3});
       T('king − man + woman ≈ queen',X0+40,Y0+H-30,{size:22,mono:true,color:C.amber});
     });
-    A(s.k(5,.8),function(){box(X0+W-560,Y0+H-70,540,50,{fill:'rgba(4,6,12,.85)',stroke:C.cyan,r:10});T('learned from data, not written by hand',X0+W-290,Y0+H-37,{size:22,align:'center',color:C.cyan})});
+    A(s.k(6,.8),function(){box(X0+W-560,Y0+H-70,540,50,{fill:'rgba(4,6,12,.85)',stroke:C.cyan,r:10});T('learned from data, not written by hand',X0+W-290,Y0+H-37,{size:22,align:'center',color:C.cyan})});
   });
 });
 
 // 4 ─ word order
 scene('Word order',[
- "There's a catch. 'Dog bites man' and 'man bites dog' contain exactly the same tokens, but they mean very different things.",
+ "Still inside the embedding step, there's a catch. 'Dog bites man' and 'man bites dog' contain exactly the same tokens, but they mean very different things.",
  "So the model also needs to know where each token sits in the sentence.",
  "To solve this, position information is mixed into every token's vector, a bit like stamping a seat number on it.",
  "Now each vector carries two things at once: what the token is, and where it is.",
@@ -372,8 +575,8 @@ scene('Word order',[
 });
 
 // 5 ─ the transformer
-scene('The transformer',[
- "Now the vectors enter the heart of the model: the transformer. It's a tall stack of identical layers, often between thirty and a hundred and twenty of them.",
+scene('Inside the transformer',[
+ "Now we zoom into stage two, the transformer, the heart of the model. Here the stacked blocks are drawn as a tower, with the token vectors flowing upward through every layer.",
  "Each layer has two parts. First comes attention, where tokens share information with each other.",
  "Second comes a feed-forward network, where each token, on its own, works on what it has just gathered.",
  "The vectors flow up through every layer, getting a little richer each time. Let's open up attention first."
@@ -403,7 +606,7 @@ scene('The transformer',[
 var ATT_TOK=['The','animal',"didn't",'cross','the','street','because','it','was','too','tired'];
 var W_TIRED=[.02,.36,.03,.04,.02,.06,.04,.29,.06,.04,.04], W_WIDE=[.02,.06,.03,.07,.05,.43,.04,.18,.05,.05,.02];
 scene('Attention',[
- "Attention is the key idea behind modern AI. Take the sentence: 'The animal didn't cross the street because it was too tired.'",
+ "Let's zoom into attention, the key idea behind modern AI. Take the sentence: 'The animal didn't cross the street because it was too tired.'",
  "Who was tired? You know instantly: the animal. A street can't be tired.",
  "But the model starts with a separate vector for each token, and the vector for 'tired' knows nothing about the rest of the sentence.",
  "Attention lets each token look back at the tokens before it, and decide which of them matter for understanding it.",
@@ -443,7 +646,7 @@ scene('Attention',[
 
 // 7 ─ query, key, value
 scene('Query, key, value',[
- "So how does a token decide where to look? Each token's vector is multiplied by three learned tables, producing three new vectors: a query, a key, and a value.",
+ "So how does a token decide where to look? Each token's vector is multiplied by three learned matrices, called W Q, W K and W V, producing three new vectors: a query, a key, and a value.",
  "The query describes what this token is looking for. 'Tired' is asking, roughly: who is my subject? Who is feeling this?",
  "The key is what each token offers, like a label on a box. 'Animal' advertises: I'm a noun, and a living thing.",
  "The query is compared with every key using a dot product: multiply the two lists of numbers pair by pair, then add it all up. A bigger score means a better match.",
@@ -463,7 +666,7 @@ scene('Query, key, value',[
         T(q[0],880,q[3]+28,{size:24,weight:800,color:q[2]});T(q[1],880,q[3]+56,{size:18,color:C.muted});
       });
     });
-    T('three learned tables turn one vector into three',640,650,{size:20,align:'center',color:C.dim});
+    T('three learned matrices turn one vector into three',640,650,{size:20,align:'center',color:C.dim});
   });
   var at=s.k(1,.8);
   A(at,function(){
@@ -493,34 +696,46 @@ scene('Query, key, value',[
   });
 });
 
-// 8 ─ causal mask
-scene('No peeking',[
- "One important rule: a token may only look at tokens that came before it, never at tokens after it.",
- "This grid shows who can look at whom. Each row is a token doing the looking. Each column is a token it might look at.",
- "Everything above the diagonal, the future, is blocked out. This is called the causal mask.",
- "It makes sense. When the model is predicting the next word, the future hasn't been written yet. And during training, it stops the model from cheating by peeking at the answer."
+// attention, all tokens at once, as matrices (includes the causal mask)
+scene('Attention as matrices',[
+ "So far we followed one token. But the model computes attention for every token at once, using matrices. Here's how.",
+ "Stack the token vectors as the rows of a matrix, called X. Multiply X by the three weight matrices, and out come a query matrix, a key matrix and a value matrix, with one row per token.",
+ "Next, multiply the queries by the keys. The result is a grid of scores, every token against every other token. Each row shows how strongly one token wants to look at each of the others.",
+ "But one rule applies: a token may only look at tokens that came before it. Everything above the diagonal, the future, is blocked. This is called the causal mask.",
+ "That makes sense. When predicting the next word, the future hasn't been written yet. And during training, the mask stops the model from cheating by peeking at the answer.",
+ "Softmax turns each row into percentages. Multiplying this grid by the value matrix blends the values together, and every token gets its updated vector, all in one go."
 ],function(s){
-  var tk=['The','cat','sat','on','the','mat'],n=6,cs=66,x0=520,y0=150;
-  var ag=s.k(1,.8);
-  A(Math.max(s.k(0,.6)*(1-s.k(1,.5)),0),function(){
-    var L=rowLayout(tk,26,{pad:14,gap:12});tk.forEach(function(t,i){chip(L[i].x,330,L[i].w,52,t,{size:26,color:i===2?C.amber:i<2?C.cyan:C.dim,glow:i===2?1:0})});
-    curve(L[2].cx,326,(L[2].cx+L[0].cx)/2,240,L[0].cx+10,326,{color:C.cyan});curve(L[2].cx,326,(L[2].cx+L[1].cx)/2,270,L[1].cx+6,326,{color:C.cyan});
-    T('✗  can’t see ahead',L[4].cx,440,{size:22,align:'center',color:C.rose});
-  });
-  A(ag,function(){
-    for(var i=0;i<n;i++){T(tk[i],x0-16,y0+i*cs+cs/2+7,{size:20,mono:true,align:'right',color:s.b>=3&&i===2?C.amber:C.ink});
-      T(tk[i],x0+i*cs+cs/2,y0-16,{size:18,mono:true,align:'center',color:C.muted})}
-    T('looking →',x0+n*cs/2,y0-50,{size:15,align:'center',color:C.dim});T('tokens doing the looking ↓',x0-150,y0-50,{size:15,align:'center',color:C.dim});
-    var mk=s.k(2,1.2);
-    for(var r=0;r<n;r++){var w=softmax(vals('m'+r,r+1).map(function(v){return v*2}));
-      for(var q=0;q<n;q++){var x=x0+q*cs,y=y0+r*cs,fut=q>r,dimRow=s.b>=3&&r!==2;
+  var tk=['The','cat','sat','on','the'],n=5,X0=110,Y0=250;
+  T('X',X0+78,Y0-44,{size:24,weight:800,align:'center',color:C.cyan});T('one row per token',X0+78,Y0-18,{size:15,align:'center',color:C.dim});
+  tk.forEach(function(t,r){T(t,X0-12,Y0+r*32+21,{size:18,mono:true,align:'right',color:s.b===4&&r===2?C.amber:C.ink});cells(X0,Y0+r*32,vals('ax'+r,6),{cw:23,ch:28,gap:3})});
+  var qa=s.k(1,1.2);
+  A(qa,function(){[['Q',C.amber,140],['K',C.cyan,300],['V',C.violet,460]].forEach(function(m,i){var y=m[2],a=EO(qa*1.5-i*.25);
+    A(a,function(){curve(X0+165,Y0+80,330,y+45,390,y+45,{color:rgba(m[1],.8),lw:1.8});
+      gridIcon(300,y+6,3,3,9,m[1],10+i);T('× W'+m[0],314,y-2,{size:14,mono:true,align:'center',color:m[1]});
+      for(var r=0;r<n;r++)cells(400,y+r*19,vals(m[0]+'row'+r,6),{cw:15,ch:16,gap:2});
+      T(m[0],400+6*17+16,y+56,{size:26,weight:800,color:m[1]})})})});
+  var gx=660,gy=210,cs=58,ga=s.k(2,.6),mk=s.k(3,1),sm=s.b>=5?EIO(s.k(5,1.4)):0;
+  A(ga,function(){
+    T('scores = Q × Kᵀ',gx+n*cs/2,gy-48,{size:20,mono:true,align:'center',color:C.ink,weight:700});
+    for(var i=0;i<n;i++){T(tk[i],gx-10,gy+i*cs+cs/2+6,{size:16,mono:true,align:'right',color:s.b===4&&i===2?C.amber:C.muted});T(tk[i],gx+i*cs+cs/2,gy-14,{size:15,mono:true,align:'center',color:C.muted})}
+    for(var r=0;r<n;r++){var raw=vals('sc'+r,n),allowed=raw.slice(0,r+1),pr=softmax(allowed.map(function(v){return v*2.2}));
+      for(var q=0;q<n;q++){var x=gx+q*cs,y=gy+r*cs,fut=q>r,reveal=EO(ga*2.2-r*.25-q*.08);
         rr(x+3,y+3,cs-6,cs-6,6);c.fillStyle='#0f1729';c.fill();
-        if(!fut){c.fillStyle=rgba(C.cyan,(.15+.85*w[q])*(dimRow?.35:1));c.fill()}
-        else{c.fillStyle=rgba(C.rose,.22*mk);c.fill();A(mk,function(){line(x+18,y+18,x+cs-18,y+cs-18,rgba(C.rose,.7),2);line(x+cs-18,y+18,x+18,y+cs-18,rgba(C.rose,.7),2)})}
+        var dimRow=s.b===4&&r!==2;
+        if(!fut||mk<1){var shade=fut?(1-mk)*(.2+.5*(raw[q]+1)/2):lerp(.2+.5*(raw[q]+1)/2,.12+.88*pr[q],sm);
+          c.save();c.globalAlpha*=reveal*(dimRow?.3:1);c.fillStyle=rgba(C.cyan,shade);c.fill();c.restore();
+          if(sm>.5&&!fut&&!dimRow)T(Math.round(pr[q]*100)+'%',x+cs/2,y+cs/2+5,{size:14,mono:true,align:'center',color:C.ink,alpha:(sm-.5)*2})}
+        if(fut&&mk>0)A(mk,function(){c.fillStyle=rgba(C.rose,.18);rr(x+3,y+3,cs-6,cs-6,6);c.fill();line(x+18,y+18,x+cs-18,y+cs-18,rgba(C.rose,.7),2);line(x+cs-18,y+18,x+18,y+cs-18,rgba(C.rose,.7),2)});
       }}
-    A(mk,function(){T('the future: blocked',x0+n*cs+30,y0+70,{size:20,color:C.rose});T('the past: visible',x0+n*cs+30,y0+n*cs-40,{size:20,color:C.cyan})});
-    A(s.k(3,.6),function(){box(x0-4,y0+2*cs,n*cs+8,cs,{stroke:C.amber,lw:2.5,r:8});T('“sat” can use The, cat, sat. Not what follows.',x0+n*cs/2,y0+n*cs+50,{size:20,align:'center',color:C.amber})});
+    A(mk*(1-s.k(5,.5)),function(){T('future: blocked',gx+n*cs+16,gy+40,{size:17,color:C.rose});T('past: allowed',gx+n*cs+16,gy+n*cs-20,{size:17,color:C.cyan})});
+    A(s.k(4,.6)*(1-s.k(5,.5)),function(){box(gx-2,gy+2*cs,n*cs+4,cs,{stroke:C.amber,lw:2.5,r:8});T('“sat” sees The, cat, sat. Not what follows.',gx+n*cs/2,gy+n*cs+36,{size:18,align:'center',color:C.amber})});
   });
+  A(s.k(5,.8),function(){var ox=1030,oy=Y0;arrow(gx+n*cs+8,gy+n*cs/2,ox-12,oy+80,{color:C.violet,lw:2});T('× V',ox-40,oy+40,{size:20,mono:true,align:'center',color:C.violet,weight:700});
+    var p=EO(clamp((s.since(5)-1)/1.2));for(var r=0;r<n;r++)cells(ox,oy+r*32,vals('ao'+r,6).map(function(v){return v*p}),{cw:21,ch:28,gap:3});
+    T('updated vectors',ox+70,oy-18,{size:16,align:'center',color:C.violet});T('one row per token',ox+70,oy+n*32+22,{size:14,align:'center',color:C.dim})});
+  var parts=[['softmax( ',5],['Q × Kᵀ',2],[' + mask',3],[' ) × V',5]];font(28,700,true);
+  var totw=parts.reduce(function(a,p){return a+c.measureText(p[0]).width},0),fx=640-totw/2;
+  A(s.k(0,.6),function(){parts.forEach(function(p){var on=s.b===p[1]||(p[1]===3&&s.b===4)||(s.b===1&&p[0]==='Q × Kᵀ');T(p[0],fx,650,{size:28,mono:true,weight:700,color:on?C.amber:C.dim});font(28,700,true);fx+=c.measureText(p[0]).width})});
 });
 
 // 9 ─ many heads
@@ -529,7 +744,7 @@ scene('Many heads',[
  "One attention pattern isn't enough. Each layer runs many attention heads side by side, often dozens of them.",
  "Each head learns to track a different kind of relationship between words. Nobody tells it which. It discovers them during training.",
  "One head might simply link each word to the word just before it. Another might connect pronouns, like 'she', to the name they refer to.",
- "Another might link verbs to whoever is doing them, or nouns to the words describing them. All the heads' findings are then combined back into each token's vector."
+ "Another might link verbs to whoever is doing them, or nouns to the words describing them. All the heads' results are joined together and multiplied by one more matrix, which mixes them back into each token's vector."
 ],function(s){
   var P=[['previous word',[[1,0],[2,1],[3,2],[4,3],[5,4],[6,5]],C.cyan],['pronoun → name',[[2,0]],C.amber],['verb → who does it',[[1,0],[3,2]],C.violet],['noun → its describers',[[6,5],[6,4]],C.green]];
   P.forEach(function(p,k){var px=70+(k%2)*580,py=110+Math.floor(k/2)*290,a=EO(s.k(0,2)*4-k*.8);
@@ -549,9 +764,9 @@ scene('Many heads',[
 
 // 10 ─ feed-forward
 scene('Feed-forward',[
- "After attention comes the second half of every layer: the feed-forward network.",
+ "Now the other half of the block: the feed-forward network.",
  "Here each token is processed on its own. The talking is over. Now it works on what it has gathered.",
- "Its vector is first expanded into a much wider one, typically four times wider, passed through a simple filter that lets strong signals through, and then squeezed back down.",
+ "The vector is multiplied by a first matrix, W up, that expands it to about four times wider. A simple filter keeps only the strong signals. Then a second matrix, W down, squeezes it back to its original size.",
  "You can picture thousands of tiny detectors. Each one fires when it spots a particular pattern, and adds a matching idea into the token's vector.",
  "This is where much of the model's knowledge seems to live. For 'The Eiffel Tower is in', detectors for landmarks and for France fire, and push the vector toward 'Paris'.",
  "Across all the layers, these networks hold about two thirds of the model's parameters: the billions of numbers it learned."
@@ -578,7 +793,7 @@ scene('Feed-forward',[
     }
     var push=s.b>=4?EO(s.k(4,1.5)):0,ov=vals('out-vec',outN);
     for(var o2=0;o2<outN;o2++){var v=lerp(ov[o2]*.4,o2%3===0?.95:ov[o2]*.6,push);rr(xo-22,ny(o2,outN)-16,44,32,6);c.fillStyle='#111a2c';c.fill();c.fillStyle=cellCol(v);c.fill()}
-    T('in',xi,yb+34,{size:18,align:'center',color:C.dim});T('detectors',xh,yb+34,{size:18,align:'center',color:C.dim});T('out',xo,yb+34,{size:18,align:'center',color:C.dim});
+    T('in',xi,yb+34,{size:18,align:'center',color:C.dim});A(s.k(2,.6),function(){T('× W up (matrix)',(xi+xh)/2,yb+34,{size:17,mono:true,align:'center',color:C.green});T('× W down (matrix)',(xh+xo)/2,yb+34,{size:17,mono:true,align:'center',color:C.green})});T('detectors',xh,yb+34,{size:18,align:'center',color:C.dim});T('out',xo,yb+34,{size:18,align:'center',color:C.dim});
   });
   A(s.k(2,.6),function(){T('4,096',xi,yt-12,{size:16,mono:true,align:'center',color:C.muted});T('16,384 wide · filter: keep strong signals',xh,yt-12,{size:16,mono:true,align:'center',color:C.muted});T('4,096',xo,yt-12,{size:16,mono:true,align:'center',color:C.muted})});
   A(s.k(4,.8),function(){arrow(xo+36,ny(3,outN),xo+110,ny(3,outN),{color:C.amber,lw:3});T('toward',xo+170,ny(3,outN)-14,{size:18,align:'center',color:C.amber});T('“Paris”',xo+170,ny(3,outN)+16,{size:26,align:'center',color:C.amber,weight:800})});
@@ -587,7 +802,7 @@ scene('Feed-forward',[
 
 // 11 ─ stacking layers
 scene('Stacking layers',[
- "Here's a subtle but important detail. A layer doesn't replace a token's vector. It adds its findings on top, like editors each adding notes to a shared document.",
+ "Zooming back out to the block as a whole, here's a subtle but important detail. A layer doesn't replace a token's vector. It adds its findings on top, like editors each adding notes to a shared document.",
  "This running vector is called the residual stream. It flows straight up through the whole model, collecting edits along the way.",
  "Stack enough layers, and understanding builds up. Early layers deal with surface details: word pieces, spelling, and basic grammar.",
  "Middle layers work out meaning: which words go together, and who did what to whom.",
@@ -614,8 +829,8 @@ scene('Stacking layers',[
 // 12 ─ scores to probabilities
 var OUT=[['Paris',.85],['a',.04],['the',.03],['located',.02],['one',.012],['Lyon',.01],['home',.008],['known',.007]];
 scene('Scores to probabilities',[
- "After the last layer, the model takes the vector at the final position. It now holds everything the model worked out about what should come next.",
- "That vector is compared with every token in the vocabulary, giving each one a score. These raw scores are called logits.",
+ "Now stage three. After the last block, the model takes the vector at the final position. It now holds everything the model worked out about what should come next.",
+ "That vector is multiplied by the output matrix, which has one column for every token in the vocabulary. The result is one score per token. These raw scores are called logits.",
  "Softmax turns the scores into probabilities: all positive, and adding up to exactly one hundred percent.",
  "For 'The capital of France is', 'Paris' might get eighty-five percent, 'a' four percent, 'the' three, and so on, across all hundred thousand tokens. Even 'zebra' gets a tiny sliver."
 ],function(s){
@@ -637,6 +852,7 @@ scene('Scores to probabilities',[
       T(lab,600+w+12,y+24,{size:17,mono:true,color:hi?C.amber:C.muted});
     });
   });
+  A(a1,function(){box(250,236,60,96,{fill:'#0a1020',r:6});gridIcon(258,244,5,9,9,C.amber,4);T('output',280,352,{size:14,align:'center',color:C.amber});T('matrix',280,368,{size:14,align:'center',color:C.amber})});
   A(s.k(2,.6),function(){box(960,560,270,56,{fill:'#0b1427',stroke:C.cyan,r:12});T('total = 100%',1095,596,{size:22,align:'center',color:C.cyan,weight:700})});
   A(s.k(1,.6)*(1-s.k(2,.4)),function(){T('~100,000 scores, one per token',1095,596,{size:18,align:'center',color:C.dim})});
 });
@@ -644,7 +860,7 @@ scene('Scores to probabilities',[
 // 13 ─ picking a word
 var SAMP=[['mat',3.0],['floor',2.3],['sofa',1.9],['bed',1.4],['roof',.9],['moon',-.6]];
 scene('Picking a word',[
- "Now the model has to pick one token. The simplest way is to always take the top choice.",
+ "The last box: picking. The model has to pick one token. The simplest way is to always take the top choice.",
  "But that tends to be dull and repetitive. So usually it draws randomly, weighted by the probabilities, like spinning a wheel where likely words get bigger slices.",
  "A setting called temperature controls how adventurous it is. A low temperature sharpens the odds toward the favourite.",
  "A high temperature flattens them, giving surprising words more of a chance. Good for creativity, risky for facts.",
@@ -699,7 +915,7 @@ scene('Picking a word',[
 
 // 14 ─ training
 scene('Training',[
- "So where do all those billions of numbers come from? They start out completely random, and an untrained model outputs gibberish.",
+ "We've seen how the model runs. But where do the billions of numbers inside all those matrices come from? They start out completely random, and an untrained model outputs gibberish.",
  "Training fixes that with a simple game: take real text, hide the next token, and ask the model to guess it.",
  "Its guess is compared with the real answer. The size of the mistake is called the loss. Right now it's large.",
  "Then a method called backpropagation works backwards through the network, figuring out how much each number contributed to the mistake.",
@@ -719,7 +935,7 @@ scene('Training',[
     T('= −log(probability given to “mat”)',80,640,{size:15,mono:true,color:C.dim})});
   // knobs: the model's parameters
   var kx=540,ky=230,nc=6,nr=5,gp=62;
-  T('parameters (billions; here 30)',kx+nc*gp/2-30,ky-30,{size:17,align:'center',color:C.muted});
+  T('numbers in the matrices (billions; here 30)',kx+nc*gp/2-30,ky-30,{size:17,align:'center',color:C.muted});
   var bp=s.b===3?clamp(s.since(3)/2.5):s.b>3?1:0;
   for(var r=0;r<nr;r++)for(var q=0;q<nc;q++){var x=kx+q*gp,y=ky+r*gp,base=vals('k'+r+q,1)[0]*Math.PI;
     var nudge=(s.b>=4?EO(s.k(4,1.2))*.35*vals('n'+r+q,1)[0]:0)+tr*.8*vals('t'+r+q,1)[0]+(s.b>=5?Math.sin(s.T*6+r+q)*.05*(1-tr):0);
@@ -776,34 +992,31 @@ scene('Becoming an assistant',[
     T('purple = special marker tokens · amber = tokens the model is predicting',X+24,Y+320,{size:18,color:C.dim})});
 });
 
-// 16 ─ recap
-var REC=['Text','Tokens','Vectors','Layers ×N','Scores','Probabilities','Pick one'];
+// recap ─ back to the big picture
 scene('Recap',[
- "Let's put it all together.",
- "Your text is split into tokens, and each token becomes a vector, with its position mixed in.",
- "The vectors pass up through dozens of layers. In each one, attention lets tokens share information, and a feed-forward network applies what the model has learned.",
- "The final vector becomes a score for every token in the vocabulary, the scores become probabilities, and one token is picked.",
- "That token is added to the text, and the loop runs again, until the answer is complete.",
- "This also explains why language models can sound confident and still be wrong. They produce the most plausible continuation, and plausible isn't always true.",
+ "Let's zoom back out to the whole machine, and put everything together.",
+ "Your text is chopped into tokens. Each token's ID picks a row from the embedding matrix, giving one vector per token, with its position mixed in.",
+ "The vectors flow through dozens of transformer blocks. In each one, attention uses the query, key and value matrices to let tokens share information, and the feed-forward matrices apply stored knowledge. Every result is added into the residual stream.",
+ "The last token's final vector is multiplied by the output matrix to score every token in the vocabulary. Softmax turns the scores into probabilities, and one token is picked.",
+ "It's appended to the text, and the loop runs again, until the answer is complete.",
+ "Every step is built from matrices of learned numbers, billions of them, tuned during training to predict the next token well.",
+ "That's also why language models can sound confident and still be wrong. They produce the most plausible continuation, and plausible isn't always true.",
  "And that is how a large language model works. Thanks for watching."
 ],function(s){
-  var y=300,xs=REC.map(function(_,i){return 110+i*177});
-  var lit=[-1,2,3,6,6,6,6][s.b];
-  REC.forEach(function(r,i){var on=i<=lit,w=150,x=xs[i]-w/2,col=i===3?C.violet:i>=4?C.amber:C.cyan;
-    A(s.k(0,.5),function(){box(x,y,w,70,{fill:on?rgba(col,.16):C.panel,stroke:on?col:C.line,r:12,lw:on?2:1.5});if(on)glow(xs[i],y+35,90,col,.18);
-      T(r,xs[i],y+42,{size:r.length>10?17:20,align:'center',color:on?C.ink:C.dim,weight:700});
-      if(i<REC.length-1)arrow(x+w+2,y+35,x+w+25,y+35,{color:on?col:C.line,lw:2,head:8})})});
-  A(s.k(2,.6),function(){T('attention + feed-forward, repeated',xs[3],y+110,{size:16,align:'center',color:C.violet})});
-  A(s.k(4,.8),function(){
-    var p=s.b===4?EO(clamp(s.since(4)/2)):1;
-    c.save();c.strokeStyle=C.amber;c.lineWidth=3;c.setLineDash([9,7]);c.beginPath();c.moveTo(xs[6],y+72);c.bezierCurveTo(xs[6],y+72+200*p,xs[0],y+72+200*p,xs[0],y+72);c.stroke();c.restore();
-    head(xs[0],y+76,-Math.PI/2,C.amber,12);T('append the new token, then go again',640,y+200,{size:22,align:'center',color:C.amber});
-  });
-  A(s.k(5,.7),function(){box(250,120,780,110,{fill:'#1a0e17',stroke:C.rose,r:14});T('plausible ≠ true',640,166,{size:30,align:'center',color:C.rose,weight:800});
-    T('it predicts likely text; it does not look facts up unless given a tool to do so',640,204,{size:18,align:'center',color:C.muted})});
-  A(s.k(6,.8),function(){T('Thanks for watching',640,640,{size:34,align:'center',weight:800,color:C.cyan})});
-  A(s.k(0,.6)*(1-s.k(5,.5)),function(){T('the whole machine, start to finish',640,170,{size:26,align:'center',color:C.muted})});
+  var HL=[null,['tok','emb'],['block'],['unemb','soft','samp'],['loop'],['mats'],null,null][s.b];
+  A(s.b>=6?1-.65*s.k(6,.8):1,function(){drawMap({hl:HL,T:s.T,words:s.b>=4?['The','cat','sat','on','the','mat']:null})});
+  A(s.b===6?s.k(6,.8):0,function(){box(340,280,600,130,{fill:'#1a0e17',stroke:C.rose,r:14});T('plausible ≠ true',640,334,{size:34,align:'center',color:C.rose,weight:800});
+    T('it predicts likely text; it doesn’t look facts up',640,376,{size:17,align:'center',color:C.muted})});
+  A(s.k(7,.8),function(){box(390,290,500,110,{fill:'rgba(4,6,12,.9)',stroke:C.cyan,r:14});T('Thanks for watching',640,358,{size:38,align:'center',weight:800,color:C.cyan})});
 });
+
+var OPTS={'The big idea':{part:1},'The whole machine':{part:1},'A token’s journey':{part:1},'Matrices':{part:1,mini:'mats'},
+ 'Tokens':{part:2,zone:'tok'},'Embeddings':{part:2,zone:'emb'},'Word order':{part:2,zone:'emb'},'Inside the transformer':{part:2,zone:'block'},
+ 'Attention':{part:2,zone:'attn'},'Query, key, value':{part:2,zone:'attn'},'Attention as matrices':{part:2,zone:'attn'},'Many heads':{part:2,zone:'attn'},
+ 'Feed-forward':{part:2,zone:'ffn'},'Stacking layers':{part:2,zone:'block'},'Scores to probabilities':{part:2,zone:'unemb',mini:['unemb','soft']},
+ 'Picking a word':{part:2,zone:'samp',mini:['samp','loop']},'Training':{part:3,mini:'mats'},'Becoming an assistant':{part:3},'Recap':{part:4}};
+SCENES.forEach(function(sc){var o=OPTS[sc.title];if(!o)throw new Error('no options for '+sc.title);sc.part=o.part;sc.zone=o.zone||null;sc.mini=o.mini||o.zone||null});
+var PARTS={1:'PART 1 · THE BIG PICTURE',2:'PART 2 · ZOOMING IN',3:'PART 3 · HOW IT LEARNS',4:'ZOOMING BACK OUT'};
 
 // ------------------------------------------------------------------ player engine
 var si=0,bi=0,playing=false,started=false,clock=0,beatT0=0,starts=[],readyAt=null,estDur=5,curU=null,ended=false;
@@ -813,16 +1026,19 @@ var $=function(id){return document.getElementById(id)};
 var capEl=$('cap'),whereEl=$('where'),barEl=$('bar'),ov=$('ov'),chapsEl=$('chaps'),scriptEl=$('script');
 
 function est(text){return text.split(/\s+/).length/(2.6*rate)+.6}
-function since(i){if(i<bi)return starts[i]==null?Infinity:clock-starts[i];if(i>bi)return -1;return clock-beatT0}
-function k(i,d){if(i<bi)return 1;if(i>bi)return 0;return EO((clock-beatT0)/(d||.8))}
+// when a chapter opens with a zoom from the map, its first step's animation waits for the zoom to finish
+var ZOOM=2.3,zoomOn=false;
+function off(i){return i===0&&zoomOn?ZOOM:0}
+function since(i){if(i<bi)return starts[i]==null?Infinity:Math.max(0,clock-starts[i]-off(i));if(i>bi)return -1;return Math.max(0,clock-beatT0-off(i))}
+function k(i,d){if(i<bi)return 1;if(i>bi)return 0;return EO((clock-beatT0-off(i))/(d||.8))}
 function stopSpeech(){curU=null;if(hasTTS){try{speechSynthesis.cancel()}catch(e){}}}
 function speak(text){
   stopSpeech();
-  if(!voiceOn||!hasTTS){readyAt=beatT0+Math.max(est(text),2.5)+GAP;return}
+  if(!voiceOn||!hasTTS){readyAt=beatT0+off(bi)+Math.max(est(text),2.5)+GAP;return}
   var u=new SpeechSynthesisUtterance(text);curU=u;uStarted=false;u.onstart=function(){if(curU===u)uStarted=true};if(voice)u.voice=voice;u.lang=voice?voice.lang:'en-US';u.rate=rate;u.pitch=1;
   // if the engine fails or ends without ever speaking, fall back to a reading-time pause so captions stay readable
-  var timed=function(){curU=null;readyAt=beatT0+Math.max(est(text),2.5)+GAP};
-  var done=function(){if(curU!==u)return;if(!uStarted)return timed();curU=null;readyAt=Math.max(clock+GAP,beatT0+2.2)};
+  var timed=function(){curU=null;readyAt=beatT0+off(bi)+Math.max(est(text),2.5)+GAP};
+  var done=function(){if(curU!==u)return;if(!uStarted)return timed();curU=null;readyAt=Math.max(clock+GAP,beatT0+off(bi)+2.2)};
   u.onend=done;u.onerror=function(e){if(curU!==u)return;if(e&&(e.error==='interrupted'||e.error==='canceled'))return;timed()};
   window.__u=u; // keep a reference so the browser doesn't drop the utterance mid-sentence
   try{speechSynthesis.resume();speechSynthesis.speak(u)}catch(e){readyAt=beatT0+est(text)+GAP}
@@ -833,13 +1049,13 @@ function startBeat(){
   if(playing)speak(text);
 }
 function go(nsi,nbi,play){
-  stopSpeech();si=clamp(nsi,0,SCENES.length-1);bi=clamp(nbi,0,SCENES[si].beats.length-1);starts=[];
+  stopSpeech();si=clamp(nsi,0,SCENES.length-1);bi=clamp(nbi,0,SCENES[si].beats.length-1);starts=[];zoomOn=!!SCENES[si].zone&&bi===0;
   if(play!==false){playing=true;started=true;ov.hidden=true}
   startBeat();
 }
 function next(){
   if(bi<SCENES[si].beats.length-1){bi++;startBeat();return}
-  if(si<SCENES.length-1){si++;bi=0;starts=[];startBeat();return}
+  if(si<SCENES.length-1){si++;bi=0;starts=[];zoomOn=!!SCENES[si].zone&&SCENES[si-1].zone!==SCENES[si].zone;startBeat();return}
   playing=false;ended=true;stopSpeech();updateUI();
   $('ovTitle').textContent='That’s the whole machine.';$('ovSub').textContent='Replay from the start, or pick any chapter below to revisit it.';$('bigLabel').textContent='Watch again';ov.hidden=false;
 }
@@ -858,7 +1074,9 @@ function toggle(){playing?pause():play()}
 
 // UI
 var segs=[];
-SCENES.forEach(function(sc,i){var d=document.createElement('div');d.className='seg';d.style.flexGrow=sc.beats.length;d.title=(i+1)+'. '+sc.title;d.appendChild(document.createElement('i'));barEl.appendChild(d);segs.push(d);
+var lastPart=0;
+SCENES.forEach(function(sc,i){if(sc.part!==lastPart){lastPart=sc.part;var ph=document.createElement('div');ph.className='part';ph.textContent=PARTS[sc.part];chapsEl.appendChild(ph)}
+  var d=document.createElement('div');d.className='seg';d.style.flexGrow=sc.beats.length;d.title=(i+1)+'. '+sc.title;d.appendChild(document.createElement('i'));barEl.appendChild(d);segs.push(d);
   var b=document.createElement('button');b.type='button';b.className='chap';b.innerHTML='<b>'+String(i+1).padStart(2,'0')+'</b><span></span>';b.lastChild.textContent=sc.title;b.onclick=function(){go(i,0);$('player').scrollIntoView({behavior:'smooth',block:'start'})};chapsEl.appendChild(b);
   var h=document.createElement('h4');h.textContent=(i+1)+'. '+sc.title;scriptEl.appendChild(h);
   sc.beats.forEach(function(t,j){var p=document.createElement('p');p.textContent=t;p.dataset.s=i;p.dataset.b=j;p.onclick=function(){go(i,j);$('player').scrollIntoView({behavior:'smooth',block:'start'})};scriptEl.appendChild(p)})});
@@ -867,7 +1085,7 @@ barEl.addEventListener('click',function(e){var r=barEl.getBoundingClientRect(),f
 function updateUI(){
   whereEl.textContent='Chapter '+(si+1)+' of '+SCENES.length+' · '+SCENES[si].title+' · step '+(bi+1)+'/'+SCENES[si].beats.length;
   segs.forEach(function(d,i){d.classList.toggle('cur',i===si)});
-  Array.prototype.forEach.call(chapsEl.children,function(b,i){b.classList.toggle('on',i===si)});
+  Array.prototype.forEach.call(chapsEl.querySelectorAll('.chap'),function(b,i){b.classList.toggle('on',i===si)});
   Array.prototype.forEach.call(scriptEl.querySelectorAll('p'),function(p){p.classList.toggle('on',+p.dataset.s===si&&+p.dataset.b===bi)});
   $('icPlay').innerHTML=playing?'<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>':'<path d="M7 4.5v15l13-7.5z"/>';$('bPlay').setAttribute('aria-label',playing?'Pause':'Play');
 }
@@ -916,16 +1134,29 @@ function frame(now){
   draw();updateBar();requestAnimationFrame(frame);
 }
 var FIX=null;
+function minimap(key){var x=1046,y=8,sc=.17;box(x-8,y-2,1280*sc+16,520*sc+12,{fill:'rgba(7,11,20,.94)',stroke:C.line,r:8});
+  c.save();c.translate(x,y+4-168*sc);c.scale(sc,sc);drawMap({hl:Array.isArray(key)?key:[key],T:clock,mini:true});c.restore()}
+function drawScene(sc,st){
+  c.save();if(sc.mini){c.translate(640,118);c.scale(.971,.971);c.translate(-640,-100)}
+  try{sc.draw(st)}catch(err){if(!draw._warned){draw._warned=1;console.error(err)}}
+  c.restore();if(sc.mini)minimap(sc.mini);
+}
 function draw(){
   c.setTransform(SC,0,0,SC,0,0);c.fillStyle=C.bg;c.fillRect(0,0,LW,LH);
   c.strokeStyle='rgba(24,35,58,.28)';c.lineWidth=1;for(var x=0;x<LW;x+=64){c.beginPath();c.moveTo(x,0);c.lineTo(x,LH);c.stroke()}for(var y=0;y<LH;y+=64){c.beginPath();c.moveTo(0,y);c.lineTo(LW,y);c.stroke()}
-  var sc=SCENES[si];
-  var st={b:bi,T:clock,k:k,since:since};
-  try{c.save();sc.draw(st);c.restore()}catch(err){c.restore();if(!draw._warned){draw._warned=1;console.error(err)}}
-  if(si>0||started){T(String(si+1).padStart(2,'0')+' / '+SCENES.length,48,52,{size:15,mono:true,color:C.cyan,weight:700});T(sc.title,120,53,{size:24,weight:800,color:C.ink})}
+  var sc=SCENES[si],st={b:bi,T:clock,k:k,since:since},tz=clock-beatT0;
+  if(sc.zone&&zoomOn&&bi===0&&tz<ZOOM){
+    // camera: hold on the whole map with the target box lit, push in on it, then cross-fade to the chapter
+    var r=MAP[sc.zone],p=EIO((tz-.5)/1.4),S=Math.min(4,1280/(r[2]*1.25),720/(r[3]*1.25)),z=lerp(1,S,p),cx=lerp(640,r[0]+r[2]/2,p),cy=lerp(380,r[1]+r[3]/2,p);
+    A(1-clamp((tz-1.7)/.6),function(){c.save();c.translate(640,380);c.scale(z,z);c.translate(-cx,-cy);drawMap({hl:[sc.zone],T:clock});c.restore()});
+    A(clamp((tz-1.7)/.6),function(){drawScene(sc,st)});
+    A(1-clamp((tz-1.2)/.4),function(){T('zooming in →',640,700,{size:16,mono:true,align:'center',color:C.dim})});
+  } else drawScene(sc,st);
+  if(si>0||started){T(PARTS[sc.part]||'',48,32,{size:13,mono:true,color:C.dim,weight:700});
+    T(String(si+1).padStart(2,'0')+' / '+SCENES.length,48,64,{size:15,mono:true,color:C.cyan,weight:700});T(sc.title,120,65,{size:24,weight:800,color:C.ink})}
 }
 // test hook: jump to a scene/beat and pretend some seconds have passed (used for screenshots)
-window.__wt={go:function(a,b,t){started=true;ov.hidden=true;playing=false;si=a;bi=b;starts=[];beatT0=0;clock=t||0;for(var i=0;i<b;i++)starts[i]=-100;beatT0=0;starts[b]=0;estDur=est(SCENES[a].beats[b]);capEl.textContent=SCENES[a].beats[b];updateUI()},scenes:SCENES};
+window.__wt={go:function(a,b,t,z){started=true;ov.hidden=true;playing=false;si=a;bi=b;zoomOn=!!z;starts=[];beatT0=0;clock=t||0;for(var i=0;i<b;i++)starts[i]=-100;beatT0=0;starts[b]=0;estDur=est(SCENES[a].beats[b]);capEl.textContent=SCENES[a].beats[b];updateUI()},scenes:SCENES};
 updateUI();requestAnimationFrame(frame);
 })();
 </script>
